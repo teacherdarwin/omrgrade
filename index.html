@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMR AutoGrader - High Precision CV</title>
+  <title>OMR AutoGrader</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -232,7 +232,7 @@
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
 
-      // Registration Alignment Squares (Corner Targets)
+      // 4 Registration Alignment Markers
       doc.setFillColor(0, 0, 0);
       doc.rect(10, 10, 12, 12, 'F');
       doc.rect(188, 10, 12, 12, 'F');
@@ -325,7 +325,7 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // CALIBRATED OPTICAL ENGINE WITH VISUAL GRID OVERLAY
+    // RELATIVE SHADING CHECK OMR ENGINE
     function runOMREngine(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
@@ -334,7 +334,7 @@
 
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
       cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 10);
+      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 9);
 
       let contours = new cv.MatVector();
       let hierarchy = new cv.Mat();
@@ -349,14 +349,14 @@
         let rect = cv.boundingRect(cnt);
         let aspectRatio = rect.width / parseFloat(rect.height);
 
-        if (area > (totalArea * 0.0003) && area < (totalArea * 0.04)) {
-          if (aspectRatio >= 0.7 && aspectRatio <= 1.3) {
+        if (area > (totalArea * 0.0005) && area < (totalArea * 0.03)) {
+          if (aspectRatio >= 0.75 && aspectRatio <= 1.25) {
             let hull = new cv.Mat();
             cv.convexHull(cnt, hull);
             let solidity = area / (cv.contourArea(hull) || 1);
             hull.delete();
 
-            if (solidity > 0.8) {
+            if (solidity > 0.85) {
               cornerCandidates.push({
                 x: rect.x + rect.width / 2,
                 y: rect.y + rect.height / 2,
@@ -401,7 +401,6 @@
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       let detected = {};
 
-      // Refined relative coordinates matching exact PDF layout
       const startXRatio = 0.178;
       const startYRatio = 0.190;
       const rowStepRatio = 0.029;
@@ -416,9 +415,10 @@
 
         let fillDensities = [];
 
+        // Sample internal area (70% radius) of each bubble in the row
         labels.forEach((_, idx) => {
           let centerX = Math.floor(itemX + (idx * W * colWidthRatio));
-          let radius = Math.floor(W * 0.013);
+          let radius = Math.floor(W * 0.009); 
 
           let filledPixels = 0;
           let count = 0;
@@ -436,18 +436,19 @@
           fillDensities.push(filledPixels / (count || 1));
         });
 
-        let sum = fillDensities.reduce((a, b) => a + b, 0);
-        let mean = sum / fillDensities.length;
-        let stdDev = Math.sqrt(fillDensities.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / fillDensities.length);
-
+        // SHADING EVALUATION: Compare highest density vs remaining unshaded bubbles
         let maxVal = Math.max(...fillDensities);
         let maxIdx = fillDensities.indexOf(maxVal);
 
-        // Absolute density check coupled with standard deviation check
-        if (maxVal > 0.35 && stdDev > 0.08 && (maxVal - mean) / stdDev > 1.1) {
+        let unshadedVals = fillDensities.filter((_, idx) => idx !== maxIdx);
+        let minVal = Math.min(...unshadedVals);
+        let avgUnshaded = unshadedVals.reduce((a, b) => a + b, 0) / unshadedVals.length;
+
+        // Requires absolute fill >= 0.40 AND must be significantly darker than unshaded neighbors
+        if (maxVal >= 0.40 && (maxVal - avgUnshaded) > 0.25 && (maxVal / (minVal || 0.01)) > 2.0) {
           detected[i] = labels[maxIdx];
         } else {
-          detected[i] = 'N/A';
+          detected[i] = 'N/A'; // Blank or unclear mark
         }
       }
 
