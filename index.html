@@ -325,19 +325,17 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // ADVANCED OPTICAL ENGINE WITH TOPOLOGICAL SORTING & SOLIDITY ANALYSIS
+    // CALIBRATED OPTICAL ENGINE WITH VISUAL GRID OVERLAY
     function runOMREngine(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
       let blur = new cv.Mat();
       let thresh = new cv.Mat();
 
-      // 1. Image Pre-processing
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
       cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 9);
+      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 10);
 
-      // 2. Tree Hierarchy Contour Detection for Corner Registration Markers
       let contours = new cv.MatVector();
       let hierarchy = new cv.Mat();
       cv.findContours(thresh, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
@@ -351,18 +349,14 @@
         let rect = cv.boundingRect(cnt);
         let aspectRatio = rect.width / parseFloat(rect.height);
 
-        // Filter for bounding area between 0.05% and 3.0% of frame area
-        if (area > (totalArea * 0.0005) && area < (totalArea * 0.03)) {
-          // Check for square aspect ratio
-          if (aspectRatio >= 0.75 && aspectRatio <= 1.25) {
+        if (area > (totalArea * 0.0003) && area < (totalArea * 0.04)) {
+          if (aspectRatio >= 0.7 && aspectRatio <= 1.3) {
             let hull = new cv.Mat();
             cv.convexHull(cnt, hull);
-            let hullArea = cv.contourArea(hull);
-            let solidity = area / (hullArea || 1);
+            let solidity = area / (cv.contourArea(hull) || 1);
             hull.delete();
 
-            // Check solidity to ensure candidate is a filled quad shape
-            if (solidity > 0.85) {
+            if (solidity > 0.8) {
               cornerCandidates.push({
                 x: rect.x + rect.width / 2,
                 y: rect.y + rect.height / 2,
@@ -376,9 +370,7 @@
       let warped = new cv.Mat();
       const W = 800, H = 1000;
 
-      // 3. Topological Sorting & Homography Transformation
       if (cornerCandidates.length >= 4) {
-        // Isolate top 4 largest candidate markers
         cornerCandidates.sort((a, b) => b.area - a.area);
         let top4 = cornerCandidates.slice(0, 4);
 
@@ -406,14 +398,14 @@
         cv.resize(thresh, warped, new cv.Size(W, H));
       }
 
-      // 4. Normalized Fill Density & Z-Score Analysis
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       let detected = {};
 
-      const startXRatio = 0.170;
+      // Refined relative coordinates matching exact PDF layout
+      const startXRatio = 0.178;
       const startYRatio = 0.190;
       const rowStepRatio = 0.029;
-      const colWidthRatio = 0.042;
+      const colWidthRatio = 0.040;
 
       for (let i = 1; i <= totalItems; i++) {
         let colIdx = Math.floor((i - 1) / 20);
@@ -426,7 +418,7 @@
 
         labels.forEach((_, idx) => {
           let centerX = Math.floor(itemX + (idx * W * colWidthRatio));
-          let radius = Math.floor(W * 0.012);
+          let radius = Math.floor(W * 0.013);
 
           let filledPixels = 0;
           let count = 0;
@@ -451,7 +443,8 @@
         let maxVal = Math.max(...fillDensities);
         let maxIdx = fillDensities.indexOf(maxVal);
 
-        if (maxVal > 0.25 && (stdDev === 0 || (maxVal - mean) / stdDev > 1.2)) {
+        // Absolute density check coupled with standard deviation check
+        if (maxVal > 0.35 && stdDev > 0.08 && (maxVal - mean) / stdDev > 1.1) {
           detected[i] = labels[maxIdx];
         } else {
           detected[i] = 'N/A';
