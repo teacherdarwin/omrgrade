@@ -8,6 +8,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
+  <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+  
   <style>
     body {
       background: radial-gradient(circle at 15% 15%, rgba(147, 51, 234, 0.15), transparent 40%),
@@ -37,7 +39,6 @@
       box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
     }
 
-    /* Tap Bubble Styling */
     .key-bubble {
       transition: all 0.2s ease;
     }
@@ -60,9 +61,12 @@
             <i class="fa-solid fa-check-double text-indigo-400 text-xl"></i>
           </div>
           <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
-            Aurora OMR
+            OMR AutoGrader
           </h1>
         </div>
+        <span id="cv-status" class="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          Loading CV Engine...
+        </span>
       </div>
       
       <div class="grid grid-cols-3 gap-2 w-full sm:w-auto text-center">
@@ -124,7 +128,7 @@
               </div>
               
               <div id="key-container" class="max-h-72 sm:max-h-80 overflow-y-auto space-y-2 pr-1 border border-slate-800/80 p-3 rounded-xl bg-slate-950/60">
-                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -147,7 +151,7 @@
                 <div class="w-5 h-5 border-t-4 border-r-4 border-indigo-400"></div>
               </div>
               <p class="text-center text-[10px] sm:text-xs text-indigo-300/90 bg-slate-900/85 backdrop-blur py-1 px-2 rounded-full self-center">
-                Align 4 corner guide marks inside frame
+                Align sheet fully inside frame
               </p>
               <div class="flex justify-between">
                 <div class="w-5 h-5 border-b-4 border-l-4 border-indigo-400"></div>
@@ -156,7 +160,7 @@
             </div>
           </div>
 
-          <button onclick="captureAndGrade()" class="mt-4 w-full max-w-md aurora-btn py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm sm:text-base">
+          <button id="scan-btn" onclick="captureAndGrade()" class="mt-4 w-full max-w-md aurora-btn py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm sm:text-base">
             <i class="fa-solid fa-bolt mr-2"></i>Scan & Grade Sheet
           </button>
         </div>
@@ -188,7 +192,7 @@
               </tr>
             </thead>
             <tbody id="records-table-body" class="divide-y divide-slate-800">
-              </tbody>
+            </tbody>
           </table>
         </div>
       </div>
@@ -197,16 +201,22 @@
   </main>
 
   <script>
-    // HARDCODED GOOGLE APPS SCRIPT ENDPOINT
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxnHWidcXhKLdP4N2PM15bVfrxKi_LDgc6D7iQ7y7ez4-l5FCg-yaXMcUWiwoSMWR8/exec";
 
-    // Application State
     let records = [];
     let answerKey = {};
     let isCameraActive = false;
     let videoStream = null;
+    let isOpenCvLoaded = false;
 
-    // Navigation Switcher
+    // OpenCV.js Initialization Listener
+    function onOpenCvReady() {
+      isOpenCvLoaded = true;
+      const statusEl = document.getElementById('cv-status');
+      statusEl.innerText = "CV Engine Ready";
+      statusEl.className = "text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+    }
+
     function switchTab(tab) {
       ['generator', 'scanner', 'records'].forEach(t => {
         document.getElementById(`sec-${t}`).classList.add('hidden');
@@ -216,7 +226,6 @@
       document.getElementById(`tab-${tab}`).className = "px-3 py-2 rounded-lg text-xs sm:text-sm font-medium aurora-btn text-white";
     }
 
-    // Build Interactive Tap-to-Select Answer Key Bubbles
     function buildKeyInputs() {
       const count = parseInt(document.getElementById('gen-item-count').value) || 20;
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
@@ -227,7 +236,6 @@
       answerKey = {};
 
       for (let i = 1; i <= count; i++) {
-        // Default answer option set to 'A'
         answerKey[i] = 'A';
 
         let bubblesHTML = choices.map(c => `
@@ -251,7 +259,6 @@
       }
     }
 
-    // Tap Option Selection Handler
     function selectKeyOption(item, choice, el) {
       answerKey[item] = choice;
       const rowBubbles = document.querySelectorAll(`.key-btn-${item}`);
@@ -263,7 +270,6 @@
     document.getElementById('gen-choices-count').addEventListener('change', buildKeyInputs);
     window.addEventListener('DOMContentLoaded', buildKeyInputs);
 
-    // 1. GENERATE PDF ANSWER SHEET (jsPDF)
     function generatePDFSheet() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -271,19 +277,16 @@
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
 
-      // 4 Corner Fiducial Alignment Marks
       doc.setFillColor(0, 0, 0);
       doc.rect(10, 10, 8, 8, 'F');
       doc.rect(192, 10, 8, 8, 'F');
       doc.rect(10, 279, 8, 8, 'F');
       doc.rect(192, 279, 8, 8, 'F');
 
-      // Header Title
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(16);
       doc.text('EXAM ANSWER SHEET', 105, 20, { align: 'center' });
 
-      // Student Container Box
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.5);
       doc.rect(25, 28, 160, 20);
@@ -293,7 +296,6 @@
       doc.text('Section: ____________________', 30, 43);
       doc.text('Date: ______________', 125, 43);
 
-      // Answer Bubble Grid
       let startX = 30;
       let startY = 58;
       let yOffset = 0;
@@ -323,7 +325,6 @@
       doc.save(`Answer_Sheet_${itemCount}_Items.pdf`);
     }
 
-    // 2. RESPONSIVE CAMERA STREAMING
     async function toggleCamera() {
       const video = document.getElementById('webcam');
       const btn = document.getElementById('toggle-cam-btn');
@@ -363,39 +364,118 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // 3. CAPTURE & PROCESS SCANS
+    // Integrated OpenCV.js Real-Time OMR Analysis
+    function analyzeRealOMRSheet(canvasId, totalItems, choicesCount) {
+      let src = cv.imread(canvasId);
+      let gray = new cv.Mat();
+      let thresholded = new cv.Mat();
+
+      // 1. Grayscale Conversion
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+
+      // 2. Adaptive Binarization
+      cv.adaptiveThreshold(gray, thresholded, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 15, 8);
+
+      const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
+      let detectedAnswers = {};
+      
+      const width = thresholded.cols;
+      const height = thresholded.rows;
+
+      // 3. Grid Analysis across canvas scale
+      const startXRatio = 0.22;
+      const startYRatio = 0.22;
+      const itemRowHeightRatio = 0.035;
+      const optionWidthRatio = 0.045;
+
+      for (let i = 1; i <= totalItems; i++) {
+        let colIndex = Math.floor((i - 1) / 20);
+        let rowIndex = (i - 1) % 20;
+
+        let rowCenterY = Math.floor(height * (startYRatio + (rowIndex * itemRowHeightRatio)));
+        let itemStartX = Math.floor(width * (startXRatio + (colIndex * 0.38)));
+
+        let maxFill = -1;
+        let selectedChoice = 'N/A';
+
+        labels.forEach((label, idx) => {
+          let bubbleCenterX = Math.floor(itemStartX + (idx * width * optionWidthRatio));
+          let radius = Math.floor(width * 0.015);
+
+          let fillCount = 0;
+          let totalPixels = 0;
+
+          // Compute pixel density inside target radius
+          for (let py = rowCenterY - radius; py <= rowCenterY + radius; py++) {
+            for (let px = bubbleCenterX - radius; px <= bubbleCenterX + radius; px++) {
+              if (px >= 0 && px < width && py >= 0 && py < height) {
+                let dist = Math.sqrt(Math.pow(px - bubbleCenterX, 2) + Math.pow(py - rowCenterY, 2));
+                if (dist <= radius) {
+                  totalPixels++;
+                  if (thresholded.ucharPtr(py, px)[0] > 0) {
+                    fillCount++;
+                  }
+                }
+              }
+            }
+          }
+
+          let fillRatio = fillCount / (totalPixels || 1);
+          if (fillRatio > 0.35 && fillRatio > maxFill) {
+            maxFill = fillRatio;
+            selectedChoice = label;
+          }
+        });
+
+        detectedAnswers[i] = selectedChoice;
+      }
+
+      src.delete(); gray.delete(); thresholded.delete();
+      return detectedAnswers;
+    }
+
     function captureAndGrade() {
+      if (!isOpenCvLoaded) {
+        alert('OpenCV.js engine is still loading. Please wait a moment...');
+        return;
+      }
+
       const section = document.getElementById('scan-section').value || 'Default-Section';
       const totalItems = Object.keys(answerKey).length;
+      const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
       
       if (totalItems === 0) {
         alert('Please configure an answer key first.');
         return;
       }
 
-      let simulatedCorrect = 0;
-      Object.keys(answerKey).forEach(() => {
-        if (Math.random() > 0.25) simulatedCorrect++;
-      });
+      // Perform genuine computer vision grading
+      const detectedAnswers = analyzeRealOMRSheet('scan-canvas', totalItems, choicesCount);
+
+      let correctCount = 0;
+      for (let i = 1; i <= totalItems; i++) {
+        if (detectedAnswers[i] && detectedAnswers[i] === answerKey[i]) {
+          correctCount++;
+        }
+      }
 
       const studentName = "Student " + Math.floor(1000 + Math.random() * 9000);
-      const scorePct = ((simulatedCorrect / totalItems) * 100).toFixed(1);
+      const scorePct = ((correctCount / totalItems) * 100).toFixed(1);
       
       const newRecord = {
         id: Date.now(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         name: studentName,
         section: section,
-        score: `${simulatedCorrect}/${totalItems}`,
+        score: `${correctCount}/${totalItems}`,
         percentage: `${scorePct}%`
       };
 
       records.push(newRecord);
       updateRecordsTable();
-      alert(`Scanned!\nStudent: ${studentName}\nScore: ${simulatedCorrect}/${totalItems} (${scorePct}%)`);
+      alert(`Scanned with OpenCV.js!\nStudent: ${studentName}\nScore: ${correctCount}/${totalItems} (${scorePct}%)`);
     }
 
-    // 4. RECORD TABLE MANAGEMENT
     function updateRecordsTable() {
       const tbody = document.getElementById('records-table-body');
       document.getElementById('record-count').innerText = records.length;
@@ -433,7 +513,6 @@
       updateRecordsTable();
     }
 
-    // 5. GOOGLE SHEETS INTEGRATION
     async function syncToGoogleSheets() {
       if (GAS_WEB_APP_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE" || !GAS_WEB_APP_URL) {
         alert('Please update the GAS_WEB_APP_URL variable inside the script section with your deployed Google Apps Script URL.');
