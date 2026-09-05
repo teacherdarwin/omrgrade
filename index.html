@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMR AutoGrader - High Precision CV</title>
+  <title>OMR AutoGrader</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -47,6 +47,29 @@
     @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);} 100% { box-shadow: 0 0 0 12px rgba(52, 211, 153, 0);} }
     .pulse-live { animation: pulse-ring 1.4s ease-out infinite; }
     .hidden-canvas { display: none; }
+
+    /* Speech Bubble CSS Fix */
+    .speech-bubble {
+      position: relative;
+      background: #4f46e5;
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .speech-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 24px;
+      border-width: 8px 8px 0;
+      border-style: solid;
+      border-color: #4f46e5 transparent;
+      display: block;
+      width: 0;
+    }
   </style>
 </head>
 <body class="min-h-screen pb-12 text-slate-100">
@@ -59,7 +82,7 @@
             <i class="fa-solid fa-microchip text-indigo-400 text-xl"></i>
           </div>
           <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
-            Precision OMR Engine
+            OMR AutoGrader Project
           </h1>
         </div>
         <span id="cv-status" class="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -80,6 +103,12 @@
 
     <!-- GENERATOR -->
     <section id="sec-generator" class="space-y-6">
+      
+      <!-- Integrated Speech Bubble Element -->
+      <div class="speech-bubble">
+        <i class="fa-solid fa-circle-info mr-2"></i>Configure your exam layout below and download the printable PDF sheet.
+      </div>
+
       <div class="aurora-card p-4 sm:p-6 rounded-2xl">
         <h2 class="text-lg font-semibold mb-4 text-indigo-300"><i class="fa-solid fa-sliders mr-2"></i>Sheet Layout Setup</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -102,7 +131,7 @@
           </div>
         </div>
         <p class="text-xs text-slate-500 mt-4 leading-relaxed">
-          Print one <strong>marked</strong> copy for yourself to build the answer key (fill it in and scan it in the Scanner tab), then print blank copies for students. Keep the item count and choice count identical across both — the scanner samples bubbles at fixed positions on this exact layout.
+          Print one <strong>marked</strong> copy for yourself to build the answer key (fill it in and scan it in the Scanner tab), then print blank copies for students. Students will bubble in their <strong>7-digit Student ID</strong> on the generated form.
         </p>
         <button onclick="generatePDFSheet()" class="mt-4 w-full sm:w-auto aurora-btn px-6 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center">
           <i class="fa-solid fa-file-arrow-down mr-2"></i>Download High-Precision PDF
@@ -164,7 +193,7 @@
           <i class="fa-solid fa-camera-viewfinder text-5xl text-indigo-400"></i>
           <h2 class="text-xl font-bold text-slate-100">Grade Student Sheets</h2>
           <p class="text-xs text-slate-400 max-w-md">
-            Pick a section with a saved key, then start scanning. The camera grades sheets automatically and continuously — just feed one sheet after another, no shutter button needed.
+            Pick a section with a saved key, then start scanning. The camera reads the 7-digit Student ID and grades sheets automatically and continuously.
           </p>
           <div class="w-full max-w-sm text-left">
             <label class="block text-xs font-medium text-slate-400 mb-1">Section to Grade Against</label>
@@ -201,6 +230,7 @@
             <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 border-b border-slate-700">
               <tr>
                 <th class="p-3">Time</th>
+                <th class="p-3">Student ID</th>
                 <th class="p-3">Student Name</th>
                 <th class="p-3">Section</th>
                 <th class="p-3">Score</th>
@@ -304,7 +334,7 @@
     const COOLDOWN_MS = 2200;
 
     let sections = {};        // { name: { itemCount, choicesCount, key: {1:'A',...} } }
-    let records = [];         // { id, timestamp, name, section, score, total, percentage, answers }
+    let records = [];         // { id, timestamp, studentId, name, section, score, total, percentage, answers }
     let editorSelections = {}; // current key-editor bubble state {1:'A',...}
 
     let isCameraActive = false;
@@ -467,24 +497,30 @@
     }
 
     // ---------- Shared physical layout (single source of truth, in mm) ----------
-    // Both the PDF generator and the OMR scanner read from this object, so the
-    // printed bubble positions and the sampled bubble positions can never drift
-    // out of sync with each other.
     const SHEET_LAYOUT = {
       markerSize: 12,     // black square markers are 12mm x 12mm
       markerLeft: 10,     // left markers' top-left corner x
       markerRight: 188,   // right markers' top-left corner x
       markerTop: 10,      // top markers' top-left corner y
       markerBottom: 275,  // bottom markers' top-left corner y
-      startX: 30,
-      startY: 56,
+      
+      // Student ID Grid Parameters (7 digits, 0-9)
+      idDigits: 7,
+      idStartX: 28,
+      idStartY: 58,
+      idStepX: 7.5,
+      idStepY: 5.5,
+
+      // Test Item Layout Parameters
+      startX: 95,
+      startY: 58,
       rowStep: 8.5,
-      colStep: 75,
+      colStep: 52,
       itemsPerColumn: 20,
       bubbleOffsetX: 8,
-      bubbleStepX: 8.5,
+      bubbleStepX: 7.5,
       bubbleYAdjust: -1.2,
-      bubbleRadius: 2.6
+      bubbleRadius: 2.2
     };
 
     function markerFrame(layout) {
@@ -507,6 +543,14 @@
       };
     }
 
+    // Physical mm position of a given student ID digit/row bubble's center
+    function idBubbleMM(colIdx, digitVal, layout) {
+      return {
+        x: layout.idStartX + colIdx * layout.idStepX,
+        y: layout.idStartY + digitVal * layout.idStepY
+      };
+    }
+
     // ---------- PDF generation ----------
     function generatePDFSheet() {
       const { jsPDF } = window.jspdf;
@@ -515,13 +559,16 @@
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
       const markAsKey = document.getElementById('gen-mark-key').checked;
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
+      const layout = { ...SHEET_LAYOUT };
 
+      // Corner Markers
       doc.setFillColor(0, 0, 0);
       doc.rect(10, 10, 12, 12, 'F');
       doc.rect(188, 10, 12, 12, 'F');
       doc.rect(10, 275, 12, 12, 'F');
       doc.rect(188, 275, 12, 12, 'F');
 
+      // Title & Header
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(16);
       doc.text('OMR ANSWER SHEET', 105, 18, { align: 'center' });
@@ -533,6 +580,7 @@
         doc.setTextColor(0, 0, 0);
       }
 
+      // Metadata Header Box
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.4);
       doc.rect(25, 26, 160, 18);
@@ -542,8 +590,39 @@
       doc.text('Section: __________________', 28, 39);
       doc.text('Date: ____________', 130, 39);
 
-      const layout = { ...SHEET_LAYOUT };
+      // Student ID Section Render
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('STUDENT ID', layout.idStartX - 2, layout.idStartY - 13);
+      
+      doc.setFontSize(6);
+      doc.setFont('Helvetica', 'normal');
+      doc.text('Write ID in boxes & fill bubbles', layout.idStartX - 2, layout.idStartY - 9);
 
+      // Draw ID Digits Boxes (7 Boxes, perfectly centered over each bubble column)
+      const firstBubbleY = idBubbleMM(0, 0, layout).y;
+      const boxWidth = 5;
+      const boxHeight = 5;
+      const boxY = firstBubbleY - layout.bubbleRadius - boxHeight - 1.5;
+
+      for (let c = 0; c < layout.idDigits; c++) {
+        const columnX = idBubbleMM(c, 0, layout).x;
+        const boxX = columnX - (boxWidth / 2);
+        doc.rect(boxX, boxY, boxWidth, boxHeight);
+      }
+
+      // Draw Student ID Bubble Grid (7 Cols x 10 Rows [0-9])
+      for (let c = 0; c < layout.idDigits; c++) {
+        for (let d = 0; d <= 9; d++) {
+          const pos = idBubbleMM(c, d, layout);
+          doc.circle(pos.x, pos.y, layout.bubbleRadius, 'S');
+          doc.setFontSize(6);
+          doc.text(String(d), pos.x - 0.7, pos.y + 0.8);
+        }
+      }
+
+      // Draw Answer Bubbles Section
+      doc.setFontSize(9);
       for (let i = 1; i <= itemCount; i++) {
         const rowIdx = (i - 1) % layout.itemsPerColumn;
         const colIdx = Math.floor((i - 1) / layout.itemsPerColumn);
@@ -673,7 +752,7 @@
       try {
         result = runOMREngine('scan-canvas', cfg.itemCount, cfg.choicesCount);
       } catch (e) {
-        return; // transient frame read issue, just wait for the next tick
+        return; // transient frame read issue, wait for next tick
       }
 
       if (!result.aligned) {
@@ -682,7 +761,7 @@
         return;
       }
 
-      const sig = JSON.stringify(result.detected);
+      const sig = JSON.stringify(result.detected) + "_" + result.studentId;
       stableHits = (sig === lastSig) ? stableHits + 1 : 1;
       lastSig = sig;
 
@@ -714,7 +793,7 @@
         return;
       }
 
-      // grade mode
+      // Grade mode
       const key = sections[activeSection].key;
       const total = cfg.itemCount;
       let correct = 0;
@@ -722,11 +801,13 @@
         if (result.detected[i] && result.detected[i] === key[i]) correct++;
       }
       const scorePct = ((correct / total) * 100).toFixed(1);
-      const studentName = "Student " + Math.floor(1000 + Math.random() * 9000);
+      const studentId = result.studentId || "Unknown";
+      const studentName = "Student " + studentId;
 
       records.push({
         id: Date.now(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        studentId: studentId,
         name: studentName,
         section: activeSection,
         score: `${correct}/${total}`,
@@ -738,7 +819,7 @@
 
       beep();
       if (navigator.vibrate) navigator.vibrate(80);
-      setToast(`✓ ${studentName} — ${correct}/${total} (${scorePct}%)`, 'emerald');
+      setToast(`✓ ID: ${studentId} — ${correct}/${total} (${scorePct}%)`, 'emerald');
 
       stableHits = 0; lastSig = null;
       scanCooldownUntil = Date.now() + COOLDOWN_MS;
@@ -755,8 +836,6 @@
     }
 
     // ---------- OMR engine ----------
-    // Returns { aligned, detected, bubbles } and draws the warped/thresholded
-    // sheet into the hidden #warp-buffer canvas for preview rendering.
     function runOMREngine(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
@@ -795,11 +874,6 @@
         cnt.delete();
       }
 
-      // Warp target is sized to exactly match the physical marker rectangle's
-      // aspect ratio (computed from SHEET_LAYOUT, in mm), at a fixed scale of
-      // 4 px/mm. Getting this ratio right matters: a mismatched target stretches
-      // the image non-uniformly, which silently shifts every bubble's sampling
-      // position further off the more rows/columns away from the top-left it is.
       const frame = markerFrame(SHEET_LAYOUT);
       const PX_PER_MM = 4;
       const W = Math.round((frame.right - frame.left) * PX_PER_MM);
@@ -824,10 +898,6 @@
         let topRight = top4[diffs.indexOf(Math.min(...diffs))];
         let bottomLeft = top4[diffs.indexOf(Math.max(...diffs))];
 
-        // Sanity-check the quad before trusting it: real markers form a
-        // rectangle with the sheet's known aspect ratio. Noise (shadows,
-        // fingers, desk texture) rarely does, so reject anything too far off
-        // rather than silently grading a garbage warp.
         const measuredWidth = (dist(topLeft, topRight) + dist(bottomLeft, bottomRight)) / 2;
         const measuredHeight = (dist(topLeft, bottomLeft) + dist(topRight, bottomRight)) / 2;
         const measuredRatio = measuredWidth / (measuredHeight || 1);
@@ -841,11 +911,6 @@
           let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
 
           let M = cv.getPerspectiveTransform(srcTri, dstTri);
-          // Warp the smooth grayscale image, NOT the already-binarized mask.
-          // Warping a hard black/white image blurs its edges into gray on
-          // resample, which the old code then miscounted as "filled" near
-          // every bubble edge. Threshold after warping instead, once the
-          // sheet is a fixed, known size.
           cv.warpPerspective(blur, warpedGray, M, new cv.Size(W, H));
           aligned = true;
 
@@ -858,10 +923,68 @@
       }
       cv.adaptiveThreshold(warpedGray, warped, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 10);
 
+      const radiusPx = SHEET_LAYOUT.bubbleRadius * PX_PER_MM * 0.85;
+
+      // 1. SCAN STUDENT ID (7 DIGITS)
+      let detectedDigits = [];
+      let idBubbles = [];
+
+      for (let c = 0; c < SHEET_LAYOUT.idDigits; c++) {
+        let fillDensities = [];
+        let positions = [];
+
+        for (let d = 0; d <= 9; d++) {
+          const mm = idBubbleMM(c, d, SHEET_LAYOUT);
+          const centerX = Math.round((mm.x - frame.left) * PX_PER_MM);
+          const centerY = Math.round((mm.y - frame.top) * PX_PER_MM);
+          const radius = Math.round(radiusPx);
+          positions.push({ x: centerX, y: centerY, r: radius });
+
+          let filledPixels = 0;
+          let count = 0;
+          for (let py = centerY - radius; py <= centerY + radius; py++) {
+            for (let px = centerX - radius; px <= centerX + radius; px++) {
+              if (px >= 0 && px < W && py >= 0 && py < H) {
+                if (Math.hypot(px - centerX, py - centerY) <= radius) {
+                  count++;
+                  if (warped.ucharPtr(py, px)[0] > 0) filledPixels++;
+                }
+              }
+            }
+          }
+          fillDensities.push(filledPixels / (count || 1));
+        }
+
+        let maxVal = Math.max(...fillDensities);
+        let maxIdx = fillDensities.indexOf(maxVal);
+        let unshadedVals = fillDensities.filter((_, idx) => idx !== maxIdx);
+        let minVal = Math.min(...unshadedVals);
+        let avgUnshaded = unshadedVals.reduce((a, b) => a + b, 0) / unshadedVals.length;
+
+        let detectedDigit = '?';
+        if (maxVal >= 0.38 && (maxVal - avgUnshaded) > 0.22 && (maxVal / (minVal || 0.01)) > 1.8) {
+          detectedDigit = String(maxIdx);
+        }
+        detectedDigits.push(detectedDigit);
+
+        for (let d = 0; d <= 9; d++) {
+          idBubbles.push({
+            digitCol: c,
+            digitVal: d,
+            x: positions[d].x,
+            y: positions[d].y,
+            r: positions[d].r,
+            isDetected: String(d) === detectedDigit
+          });
+        }
+      }
+
+      const studentId = detectedDigits.join('');
+
+      // 2. SCAN QUESTION ITEMS
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       let detected = {};
       let bubbles = [];
-      const radiusPx = SHEET_LAYOUT.bubbleRadius * PX_PER_MM * 0.85; // sample slightly inside the printed circle
 
       for (let i = 1; i <= totalItems; i++) {
         let fillDensities = [];
@@ -911,7 +1034,7 @@
       src.delete(); gray.delete(); blur.delete(); thresh.delete();
       contours.delete(); hierarchy.delete(); warped.delete(); warpedGray.delete();
 
-      return { aligned, detected, bubbles };
+      return { aligned, studentId, detected, bubbles, idBubbles };
     }
 
     // ---------- Preview rendering ----------
@@ -929,8 +1052,24 @@
       const scaleY = preview.height / buffer.height;
       const key = (cameraMode === 'grade' && sections[activeSection]) ? sections[activeSection].key : null;
 
+      // Draw ID Bubbles Preview
+      if (result.idBubbles) {
+        result.idBubbles.forEach(b => {
+          const x = b.x * scaleX, y = b.y * scaleY, r = Math.max(2, b.r * scaleX);
+          if (b.isDetected) {
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = '#38bdf8'; // cyan highlight for Student ID
+            ctx.globalAlpha = 0.85;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+        });
+      }
+
+      // Draw Test Item Bubbles Preview
       result.bubbles.forEach(b => {
-        const x = b.x * scaleX, y = b.y * scaleY, r = Math.max(3, b.r * scaleX);
+        const x = b.x * scaleX, y = b.y * scaleY, r = Math.max(2.5, b.r * scaleX);
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.lineWidth = 1;
@@ -967,8 +1106,6 @@
       el.innerText = text;
       el.className = `mt-3 text-sm font-semibold text-center py-2 rounded-lg bg-slate-900/60 border border-slate-800 ${textColors[tone] || 'text-slate-400'}`;
     }
-    // toast alias used within finalizeCapture
-    function setToastGrade(text) { setToast(text, 'emerald'); }
 
     function flashToastOnPage(msg) {
       let el = document.getElementById('page-toast');
@@ -996,7 +1133,7 @@
         osc.connect(gain).connect(ctxA.destination);
         osc.start();
         osc.stop(ctxA.currentTime + 0.18);
-      } catch (e) { /* audio not available, ignore */ }
+      } catch (e) { /* audio not available */ }
     }
 
     // ---------- Records ----------
@@ -1017,6 +1154,7 @@
         row.className = 'hover:bg-slate-800/40 border-b border-slate-800';
         row.innerHTML = `
           <td class="p-3 text-slate-400">${escapeHtml(rec.timestamp)}</td>
+          <td class="p-3 font-mono text-indigo-300">${escapeHtml(rec.studentId || 'N/A')}</td>
           <td class="p-3 font-medium text-white cursor-pointer" onclick="editRecordName(${rec.id})" title="Click to rename">${escapeHtml(rec.name)} <i class="fa-solid fa-pen text-[10px] text-slate-500 ml-1"></i></td>
           <td class="p-3 text-slate-300">${escapeHtml(rec.section)}</td>
           <td class="p-3 font-semibold text-indigo-300">${escapeHtml(rec.score)}</td>
@@ -1049,8 +1187,8 @@
 
     function exportCSV() {
       if (records.length === 0) { alert('No records to export yet.'); return; }
-      const header = ['Time', 'Student Name', 'Section', 'Score', 'Percentage'];
-      const rows = records.map(r => [r.timestamp, r.name, r.section, r.score, r.percentage]);
+      const header = ['Time', 'Student ID', 'Student Name', 'Section', 'Score', 'Percentage'];
+      const rows = records.map(r => [r.timestamp, r.studentId || '', r.name, r.section, r.score, r.percentage]);
       const csv = [header, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
