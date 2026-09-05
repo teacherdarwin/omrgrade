@@ -325,60 +325,88 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // OVERHAULED OPTICAL ENGINE WITH WARP & DENSITY ADAPTATION
+    // ADVANCED OPTICAL ENGINE WITH TOPOLOGICAL SORTING & SOLIDITY ANALYSIS
     function runOMREngine(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
       let blur = new cv.Mat();
       let thresh = new cv.Mat();
 
+      // 1. Image Pre-processing
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
       cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 15, 8);
+      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 9);
 
+      // 2. Tree Hierarchy Contour Detection for Corner Registration Markers
       let contours = new cv.MatVector();
       let hierarchy = new cv.Mat();
-      cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      cv.findContours(thresh, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
 
       let cornerCandidates = [];
       let totalArea = thresh.cols * thresh.rows;
 
       for (let i = 0; i < contours.size(); ++i) {
         let cnt = contours.get(i);
+        let area = cv.contourArea(cnt);
         let rect = cv.boundingRect(cnt);
         let aspectRatio = rect.width / parseFloat(rect.height);
-        let area = rect.width * rect.height;
 
-        if (aspectRatio >= 0.75 && aspectRatio <= 1.3 && area > (totalArea * 0.0004) && area < (totalArea * 0.02)) {
-          cornerCandidates.push({
-            x: rect.x + rect.width / 2,
-            y: rect.y + rect.height / 2
-          });
+        // Filter for bounding area between 0.05% and 3.0% of frame area
+        if (area > (totalArea * 0.0005) && area < (totalArea * 0.03)) {
+          // Check for square aspect ratio
+          if (aspectRatio >= 0.75 && aspectRatio <= 1.25) {
+            let hull = new cv.Mat();
+            cv.convexHull(cnt, hull);
+            let hullArea = cv.contourArea(hull);
+            let solidity = area / (hullArea || 1);
+            hull.delete();
+
+            // Check solidity to ensure candidate is a filled quad shape
+            if (solidity > 0.85) {
+              cornerCandidates.push({
+                x: rect.x + rect.width / 2,
+                y: rect.y + rect.height / 2,
+                area: area
+              });
+            }
+          }
         }
       }
 
       let warped = new cv.Mat();
       const W = 800, H = 1000;
 
+      // 3. Topological Sorting & Homography Transformation
       if (cornerCandidates.length >= 4) {
-        cornerCandidates.sort((a, b) => a.y - b.y);
-        let topTwo = cornerCandidates.slice(0, 2).sort((a, b) => a.x - b.x);
-        let bottomTwo = cornerCandidates.slice(-2).sort((a, b) => a.x - b.x);
+        // Isolate top 4 largest candidate markers
+        cornerCandidates.sort((a, b) => b.area - a.area);
+        let top4 = cornerCandidates.slice(0, 4);
+
+        let sums = top4.map(p => p.x + p.y);
+        let diffs = top4.map(p => p.y - p.x);
+
+        let topLeft = top4[sums.indexOf(Math.min(...sums))];
+        let bottomRight = top4[sums.indexOf(Math.max(...sums))];
+        let topRight = top4[diffs.indexOf(Math.min(...diffs))];
+        let bottomLeft = top4[diffs.indexOf(Math.max(...diffs))];
 
         let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-          topTwo[0].x, topTwo[0].y,
-          topTwo[1].x, topTwo[1].y,
-          bottomTwo[1].x, bottomTwo[1].y,
-          bottomTwo[0].x, bottomTwo[0].y
+          topLeft.x, topLeft.y,
+          topRight.x, topRight.y,
+          bottomRight.x, bottomRight.y,
+          bottomLeft.x, bottomLeft.y
         ]);
         let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
+        
         let M = cv.getPerspectiveTransform(srcTri, dstTri);
         cv.warpPerspective(thresh, warped, M, new cv.Size(W, H));
+        
         srcTri.delete(); dstTri.delete(); M.delete();
       } else {
         cv.resize(thresh, warped, new cv.Size(W, H));
       }
 
+      // 4. Normalized Fill Density & Z-Score Analysis
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       let detected = {};
 
@@ -416,7 +444,6 @@
           fillDensities.push(filledPixels / (count || 1));
         });
 
-        // Compute local mean & standard deviation to prevent false positives from shadows
         let sum = fillDensities.reduce((a, b) => a + b, 0);
         let mean = sum / fillDensities.length;
         let stdDev = Math.sqrt(fillDensities.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / fillDensities.length);
@@ -424,7 +451,6 @@
         let maxVal = Math.max(...fillDensities);
         let maxIdx = fillDensities.indexOf(maxVal);
 
-        // Z-Score Threshold Validation
         if (maxVal > 0.25 && (stdDev === 0 || (maxVal - mean) / stdDev > 1.2)) {
           detected[i] = labels[maxIdx];
         } else {
@@ -432,7 +458,9 @@
         }
       }
 
-      src.delete(); gray.delete(); blur.delete(); thresh.delete(); contours.delete(); hierarchy.delete(); warped.delete();
+      src.delete(); gray.delete(); blur.delete(); thresh.delete(); 
+      contours.delete(); hierarchy.delete(); warped.delete();
+      
       return detected;
     }
 
