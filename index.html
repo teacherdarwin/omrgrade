@@ -3,52 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoGrader</title>
+  <title>OMR AutoGrader - High Precision CV</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
   <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
   
   <style>
     body {
       background: radial-gradient(circle at 15% 15%, rgba(147, 51, 234, 0.15), transparent 40%),
                   radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.15), transparent 40%),
-                  radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.1), transparent 50%),
                   #0f172a;
       background-attachment: fixed;
       color: #f8fafc;
       font-family: system-ui, -apple-system, sans-serif;
     }
-
     .aurora-card {
       background: rgba(30, 41, 59, 0.75);
       backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.12);
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
-
-    .aurora-modal {
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      box-shadow: 0 0 40px rgba(99, 102, 241, 0.25);
-    }
-
     .aurora-btn {
       background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
       transition: all 0.3s ease;
     }
-
     .aurora-btn:hover {
       opacity: 0.9;
       box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
-    }
-
-    .key-bubble {
-      transition: all 0.2s ease;
     }
     .key-bubble.selected {
       background-color: #6366f1;
@@ -66,27 +48,21 @@
       <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
         <div class="flex items-center space-x-3">
           <div class="p-2 bg-indigo-600/30 rounded-lg border border-indigo-400/30">
-            <i class="fa-solid fa-check-double text-indigo-400 text-xl"></i>
+            <i class="fa-solid fa-microchip text-indigo-400 text-xl"></i>
           </div>
           <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
-            OMR AutoGrader
+            Precision OMR Engine
           </h1>
         </div>
         <span id="cv-status" class="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-          Loading CV Engine...
+          Loading OpenCV...
         </span>
       </div>
       
       <div class="grid grid-cols-3 gap-2 w-full sm:w-auto text-center">
-        <button onclick="switchTab('generator')" id="tab-generator" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium aurora-btn text-white">
-          <i class="fa-solid fa-file-pdf sm:mr-2"></i><span class="hidden sm:inline">Sheet </span>Generator
-        </button>
-        <button onclick="switchTab('scanner')" id="tab-scanner" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-          <i class="fa-solid fa-camera sm:mr-2"></i>Scanner
-        </button>
-        <button onclick="switchTab('records')" id="tab-records" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-          <i class="fa-solid fa-list-check sm:mr-2"></i>Records (<span id="record-count">0</span>)
-        </button>
+        <button onclick="switchTab('generator')" id="tab-generator" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium aurora-btn text-white">Generator</button>
+        <button onclick="switchTab('scanner')" id="tab-scanner" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Scanner</button>
+        <button onclick="switchTab('records')" id="tab-records" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Records (<span id="record-count">0</span>)</button>
       </div>
     </div>
   </header>
@@ -95,7 +71,7 @@
 
     <section id="sec-generator" class="space-y-6">
       <div class="aurora-card p-4 sm:p-6 rounded-2xl">
-        <h2 class="text-lg font-semibold mb-4 text-indigo-300"><i class="fa-solid fa-sliders mr-2"></i>Configure Printable Sheet</h2>
+        <h2 class="text-lg font-semibold mb-4 text-indigo-300"><i class="fa-solid fa-sliders mr-2"></i>Sheet Layout Setup</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <label class="block text-xs font-medium text-slate-400 mb-1">Number of Test Items</label>
@@ -110,7 +86,7 @@
           </div>
           <div class="sm:col-span-2 lg:col-span-1 flex items-end">
             <button onclick="generatePDFSheet()" class="w-full aurora-btn py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center">
-              <i class="fa-solid fa-file-arrow-down mr-2"></i>Generate Printable PDF Sheet
+              <i class="fa-solid fa-file-arrow-down mr-2"></i>Download High-Precision PDF
             </button>
           </div>
         </div>
@@ -119,37 +95,23 @@
 
     <section id="sec-scanner" class="hidden space-y-6">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        <div class="lg:col-span-5 aurora-card p-4 sm:p-6 rounded-2xl space-y-5 flex flex-col justify-between">
+        <div class="lg:col-span-5 aurora-card p-4 sm:p-6 rounded-2xl space-y-5">
           <div>
-            <h2 class="text-lg font-semibold text-indigo-300 mb-4"><i class="fa-solid fa-key mr-2"></i>Answer Key & Class Setup</h2>
-            
+            <h2 class="text-lg font-semibold text-indigo-300 mb-4"><i class="fa-solid fa-key mr-2"></i>Answer Key Setup</h2>
             <div class="mb-4">
-              <label class="block text-xs font-medium text-slate-400 mb-1">Active Class Section</label>
-              <input type="text" id="scan-section" placeholder="e.g. 10-Gold" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+              <label class="block text-xs font-medium text-slate-400 mb-1">Class Section Target</label>
+              <input type="text" id="scan-section" placeholder="e.g. Math-101" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
             </div>
-
-            <div>
-              <div class="flex justify-between items-center mb-2">
-                <label class="text-xs font-medium text-slate-400">Tap to Select Correct Answer</label>
-                <button onclick="buildKeyInputs()" class="text-xs text-indigo-400 hover:text-indigo-300">Reset Key</button>
-              </div>
-              
-              <div id="key-container" class="max-h-72 sm:max-h-80 overflow-y-auto space-y-2 pr-1 border border-slate-800/80 p-3 rounded-xl bg-slate-950/60">
-              </div>
-            </div>
+            <div id="key-container" class="max-h-80 overflow-y-auto space-y-2 pr-1 border border-slate-800 p-3 rounded-xl bg-slate-950/60"></div>
           </div>
         </div>
 
-        <div class="lg:col-span-7 aurora-card p-6 sm:p-8 rounded-2xl flex flex-col items-center justify-center text-center">
-          <div class="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-full mb-4">
-            <i class="fa-solid fa-camera-viewfinder text-4xl text-indigo-400"></i>
-          </div>
-          <h2 class="text-xl font-bold text-slate-100 mb-2">Ready to Scan Exam Sheets</h2>
-          <p class="text-xs text-slate-400 max-w-md mb-6">Launch the scanner camera modal to align the answer sheet inside the live computer vision viewfinder.</p>
-          
-          <button onclick="openCameraModal()" class="w-full max-w-sm aurora-btn py-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm sm:text-base">
-            <i class="fa-solid fa-expand mr-2"></i>Launch Scanner Viewport
+        <div class="lg:col-span-7 aurora-card p-6 rounded-2xl flex flex-col items-center justify-center text-center">
+          <i class="fa-solid fa-camera-viewfinder text-5xl text-indigo-400 mb-4"></i>
+          <h2 class="text-xl font-bold text-slate-100 mb-2">Optical Scanning Terminal</h2>
+          <p class="text-xs text-slate-400 max-w-md mb-6">Ensure the 4 registration markers on the sheet are fully visible within the camera viewport.</p>
+          <button onclick="openCameraModal()" class="w-full max-w-sm aurora-btn py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm">
+            <i class="fa-solid fa-expand mr-2"></i>Open Scanner Viewport
           </button>
         </div>
       </div>
@@ -157,30 +119,25 @@
 
     <section id="sec-records" class="hidden space-y-6">
       <div class="aurora-card p-4 sm:p-6 rounded-2xl">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h2 class="text-lg font-semibold text-indigo-300"><i class="fa-solid fa-table-list mr-2"></i>Scanned Results Logs</h2>
-            <p class="text-xs text-slate-400">Edit values if needed before syncing.</p>
-          </div>
-          <button onclick="syncToGoogleSheets()" class="w-full sm:w-auto aurora-btn px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center">
-            <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Sync All to Google Sheets
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-lg font-semibold text-indigo-300"><i class="fa-solid fa-table-list mr-2"></i>Scanned Results</h2>
+          <button onclick="syncToGoogleSheets()" class="aurora-btn px-4 py-2 rounded-lg text-sm font-semibold text-white">
+            <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Sync to Google Sheets
           </button>
         </div>
-
         <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs sm:text-sm text-slate-300 min-w-[500px]">
-            <thead class="bg-slate-900/80 text-[10px] sm:text-xs uppercase text-slate-400 border-b border-slate-700">
+          <table class="w-full text-left text-xs sm:text-sm text-slate-300">
+            <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 border-b border-slate-700">
               <tr>
-                <th class="p-2 sm:p-3">Time</th>
-                <th class="p-2 sm:p-3">Student Name</th>
-                <th class="p-2 sm:p-3">Section</th>
-                <th class="p-2 sm:p-3">Score</th>
-                <th class="p-2 sm:p-3">Percentage</th>
-                <th class="p-2 sm:p-3 text-right">Action</th>
+                <th class="p-3">Time</th>
+                <th class="p-3">Student Name</th>
+                <th class="p-3">Section</th>
+                <th class="p-3">Score</th>
+                <th class="p-3">Percentage</th>
+                <th class="p-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody id="records-table-body" class="divide-y divide-slate-800">
-            </tbody>
+            <tbody id="records-table-body" class="divide-y divide-slate-800"></tbody>
           </table>
         </div>
       </div>
@@ -189,73 +146,18 @@
   </main>
 
   <div id="camera-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-    <div class="aurora-modal w-full max-w-xl rounded-2xl overflow-hidden flex flex-col">
+    <div class="aurora-card w-full max-w-xl rounded-2xl overflow-hidden flex flex-col">
       <div class="p-4 border-b border-slate-700/60 flex justify-between items-center bg-slate-900/50">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-camera-retro text-indigo-400"></i>
-          <h3 class="font-semibold text-indigo-200 text-sm sm:text-base">Optical Scanner Viewport</h3>
-        </div>
-        <button onclick="closeCameraModal()" class="text-slate-400 hover:text-white p-1">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
+        <h3 class="font-semibold text-indigo-200 text-sm">Align Sheet Within Viewport</h3>
+        <button onclick="closeCameraModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
-
       <div class="p-4 flex flex-col items-center">
-        <div class="relative w-full aspect-[3/4] max-h-[60vh] bg-slate-950 rounded-xl overflow-hidden border border-slate-700/80 flex items-center justify-center">
+        <div class="relative w-full aspect-[3/4] max-h-[60vh] bg-slate-950 rounded-xl overflow-hidden border border-slate-700/80">
           <video id="webcam" class="hidden" playsinline></video>
           <canvas id="scan-canvas" class="w-full h-full object-cover"></canvas>
-          
-          <div id="camera-overlay" class="absolute inset-0 pointer-events-none border-2 border-dashed border-indigo-500/40 m-4 sm:m-6 rounded-lg flex flex-col justify-between p-3">
-            <div class="flex justify-between">
-              <div class="w-5 h-5 border-t-4 border-l-4 border-indigo-400"></div>
-              <div class="w-5 h-5 border-t-4 border-r-4 border-indigo-400"></div>
-            </div>
-            <p class="text-center text-[10px] sm:text-xs text-indigo-300/90 bg-slate-900/85 backdrop-blur py-1 px-3 rounded-full self-center border border-indigo-500/30">
-              Align sheet corner boxes inside frame
-            </p>
-            <div class="flex justify-between">
-              <div class="w-5 h-5 border-b-4 border-l-4 border-indigo-400"></div>
-              <div class="w-5 h-5 border-b-4 border-r-4 border-indigo-400"></div>
-            </div>
-          </div>
         </div>
-
-        <button id="scan-btn" onclick="captureAndGrade()" class="mt-4 w-full aurora-btn py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm sm:text-base">
-          <i class="fa-solid fa-bolt mr-2"></i>Scan & Grade Sheet
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div id="result-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-    <div class="aurora-modal w-full max-w-md rounded-2xl overflow-hidden p-6 text-center space-y-5 border border-indigo-500/40">
-      <div id="result-badge-icon" class="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 text-3xl">
-        <i class="fa-solid fa-graduation-cap"></i>
-      </div>
-
-      <div>
-        <h3 class="text-xs uppercase tracking-widest text-indigo-300 font-semibold mb-1">Grading Completed</h3>
-        <h2 id="result-student-name" class="text-xl font-bold text-white">Student Name</h2>
-        <p id="result-section" class="text-xs text-slate-400">Section: 10-Gold</p>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
-        <div class="p-2 border-r border-slate-800">
-          <p class="text-[10px] uppercase text-slate-400 font-medium">Score</p>
-          <p id="result-score" class="text-2xl font-black text-indigo-400">0 / 0</p>
-        </div>
-        <div class="p-2">
-          <p class="text-[10px] uppercase text-slate-400 font-medium">Percentage</p>
-          <p id="result-percentage" class="text-2xl font-black text-emerald-400">0.0%</p>
-        </div>
-      </div>
-
-      <div class="flex gap-3">
-        <button onclick="closeResultModal()" class="w-full py-2.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-          Close
-        </button>
-        <button onclick="closeResultModal(); openCameraModal();" class="w-full aurora-btn py-2.5 rounded-lg text-xs font-semibold text-white">
-          Scan Next
+        <button id="scan-btn" onclick="captureAndGrade()" class="mt-4 w-full aurora-btn py-3 rounded-xl font-bold text-white shadow-lg">
+          <i class="fa-solid fa-bolt mr-2"></i>Capture & Grade Immediately
         </button>
       </div>
     </div>
@@ -297,23 +199,17 @@
 
       for (let i = 1; i <= count; i++) {
         answerKey[i] = 'A';
-
         let bubblesHTML = choices.map(c => `
-          <button 
-            type="button"
-            onclick="selectKeyOption(${i}, '${c}', this)" 
-            class="key-bubble key-btn-${i} w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-600 text-xs font-semibold text-slate-300 flex items-center justify-center hover:border-indigo-400 ${c === 'A' ? 'selected' : ''}"
-            data-choice="${c}">
+          <button type="button" onclick="selectKeyOption(${i}, '${c}', this)" 
+            class="key-bubble key-btn-${i} w-7 h-7 rounded-full border border-slate-600 text-xs font-semibold text-slate-300 hover:border-indigo-400 ${c === 'A' ? 'selected' : ''}">
             ${c}
           </button>
         `).join('');
 
         container.innerHTML += `
-          <div class="flex items-center justify-between py-1.5 px-2 rounded-lg bg-slate-900/40 border border-slate-800/40">
+          <div class="flex items-center justify-between py-1 px-2 rounded bg-slate-900/40 border border-slate-800">
             <span class="text-xs font-medium text-indigo-200">Q${i}</span>
-            <div class="flex space-x-1.5 sm:space-x-2">
-              ${bubblesHTML}
-            </div>
+            <div class="flex space-x-1">${bubblesHTML}</div>
           </div>
         `;
       }
@@ -321,8 +217,7 @@
 
     function selectKeyOption(item, choice, el) {
       answerKey[item] = choice;
-      const rowBubbles = document.querySelectorAll(`.key-btn-${item}`);
-      rowBubbles.forEach(b => b.classList.remove('selected'));
+      document.querySelectorAll(`.key-btn-${item}`).forEach(b => b.classList.remove('selected'));
       el.classList.add('selected');
     }
 
@@ -337,28 +232,28 @@
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
 
-      // Marker registration squares (10mm size)
+      // Registration Alignment Squares (Corner Targets)
       doc.setFillColor(0, 0, 0);
-      doc.rect(10, 10, 10, 10, 'F');
-      doc.rect(190, 10, 10, 10, 'F');
-      doc.rect(10, 277, 10, 10, 'F');
-      doc.rect(190, 277, 10, 10, 'F');
+      doc.rect(10, 10, 12, 12, 'F');
+      doc.rect(188, 10, 12, 12, 'F');
+      doc.rect(10, 275, 12, 12, 'F');
+      doc.rect(188, 275, 12, 12, 'F');
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text('EXAM ANSWER SHEET', 105, 18, { align: 'center' });
+      doc.text('OMR ANSWER SHEET', 105, 18, { align: 'center' });
 
       doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.5);
-      doc.rect(25, 26, 160, 20);
-      doc.setFontSize(10);
+      doc.setLineWidth(0.4);
+      doc.rect(25, 26, 160, 18);
+      doc.setFontSize(9);
       doc.setFont('Helvetica', 'normal');
-      doc.text('Student Name: _________________________________', 30, 34);
-      doc.text('Section: ____________________', 30, 41);
-      doc.text('Date: ______________', 125, 41);
+      doc.text('Student Name: _________________________________', 28, 33);
+      doc.text('Section: __________________', 28, 39);
+      doc.text('Date: ____________', 130, 39);
 
       let startX = 30;
-      let startY = 58;
+      let startY = 56;
       let yOffset = 0;
       let colOffset = 0;
 
@@ -369,26 +264,25 @@
         doc.text(`${i}.`, currentX, currentY);
 
         labels.forEach((label, idx) => {
-          let bubbleX = currentX + 8 + (idx * 9);
-          doc.circle(bubbleX, currentY - 1.5, 2.8, 'S');
-          doc.setFontSize(7);
-          doc.text(label, bubbleX - 0.8, currentY - 0.5);
-          doc.setFontSize(10);
+          let bubbleX = currentX + 8 + (idx * 8.5);
+          doc.circle(bubbleX, currentY - 1.2, 2.6, 'S');
+          doc.setFontSize(6.5);
+          doc.text(label, bubbleX - 0.7, currentY - 0.3);
+          doc.setFontSize(9);
         });
 
-        yOffset += 9;
+        yOffset += 8.5;
         if (i % 20 === 0) {
           colOffset += 75;
           yOffset = 0;
         }
       }
 
-      doc.save(`Answer_Sheet_${itemCount}_Items.pdf`);
+      doc.save(`OMR_Sheet_${itemCount}_Items.pdf`);
     }
 
     async function openCameraModal() {
-      const modal = document.getElementById('camera-modal');
-      modal.classList.remove('hidden');
+      document.getElementById('camera-modal').classList.remove('hidden');
       await startCamera();
     }
 
@@ -408,15 +302,13 @@
         isCameraActive = true;
         renderCameraToCanvas();
       } catch (err) {
-        alert('Camera access denied or unavailable: ' + err.message);
+        alert('Camera access denied: ' + err.message);
         closeCameraModal();
       }
     }
 
     function stopCamera() {
-      if (videoStream) {
-        videoStream.getTracks().forEach(t => t.stop());
-      }
+      if (videoStream) videoStream.getTracks().forEach(t => t.stop());
       isCameraActive = false;
     }
 
@@ -433,22 +325,23 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // High Accuracy Optical Mark Recognition Logic
-    function analyzeRealOMRSheet(canvasId, totalItems, choicesCount) {
+    // OVERHAULED OPTICAL ENGINE WITH WARP & DENSITY ADAPTATION
+    function runOMREngine(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
-      let thresholded = new cv.Mat();
+      let blur = new cv.Mat();
+      let thresh = new cv.Mat();
 
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-      cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-      cv.adaptiveThreshold(gray, thresholded, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 9);
+      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 15, 8);
 
       let contours = new cv.MatVector();
       let hierarchy = new cv.Mat();
-      cv.findContours(thresholded, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-      let candidateCorners = [];
-      let imgArea = thresholded.cols * thresholded.rows;
+      let cornerCandidates = [];
+      let totalArea = thresh.cols * thresh.rows;
 
       for (let i = 0; i < contours.size(); ++i) {
         let cnt = contours.get(i);
@@ -456,22 +349,21 @@
         let aspectRatio = rect.width / parseFloat(rect.height);
         let area = rect.width * rect.height;
 
-        if (aspectRatio >= 0.75 && aspectRatio <= 1.35 && area > (imgArea * 0.0005) && area < (imgArea * 0.05)) {
-          candidateCorners.push({
+        if (aspectRatio >= 0.75 && aspectRatio <= 1.3 && area > (totalArea * 0.0004) && area < (totalArea * 0.02)) {
+          cornerCandidates.push({
             x: rect.x + rect.width / 2,
-            y: rect.y + rect.height / 2,
-            area: area
+            y: rect.y + rect.height / 2
           });
         }
       }
 
       let warped = new cv.Mat();
-      let W = 800, H = 1000;
+      const W = 800, H = 1000;
 
-      if (candidateCorners.length >= 4) {
-        candidateCorners.sort((a, b) => a.y - b.y);
-        let topTwo = candidateCorners.slice(0, 2).sort((a, b) => a.x - b.x);
-        let bottomTwo = candidateCorners.slice(-2).sort((a, b) => a.x - b.x);
+      if (cornerCandidates.length >= 4) {
+        cornerCandidates.sort((a, b) => a.y - b.y);
+        let topTwo = cornerCandidates.slice(0, 2).sort((a, b) => a.x - b.x);
+        let bottomTwo = cornerCandidates.slice(-2).sort((a, b) => a.x - b.x);
 
         let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
           topTwo[0].x, topTwo[0].y,
@@ -481,131 +373,101 @@
         ]);
         let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
         let M = cv.getPerspectiveTransform(srcTri, dstTri);
-        
-        cv.warpPerspective(thresholded, warped, M, new cv.Size(W, H));
+        cv.warpPerspective(thresh, warped, M, new cv.Size(W, H));
         srcTri.delete(); dstTri.delete(); M.delete();
       } else {
-        cv.resize(thresholded, warped, new cv.Size(W, H));
+        cv.resize(thresh, warped, new cv.Size(W, H));
       }
 
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
-      let detectedAnswers = {};
+      let detected = {};
 
-      const startXRatio = 0.175;
-      const startYRatio = 0.198;
-      const itemRowHeightRatio = 0.0305;
-      const optionWidthRatio = 0.043;
+      const startXRatio = 0.170;
+      const startYRatio = 0.190;
+      const rowStepRatio = 0.029;
+      const colWidthRatio = 0.042;
 
       for (let i = 1; i <= totalItems; i++) {
-        let colIndex = Math.floor((i - 1) / 20);
-        let rowIndex = (i - 1) % 20;
+        let colIdx = Math.floor((i - 1) / 20);
+        let rowIdx = (i - 1) % 20;
 
-        let rowCenterY = Math.floor(H * (startYRatio + (rowIndex * itemRowHeightRatio)));
-        let itemStartX = Math.floor(W * (startXRatio + (colIndex * 0.38)));
+        let centerY = Math.floor(H * (startYRatio + (rowIdx * rowStepRatio)));
+        let itemX = Math.floor(W * (startXRatio + (colIdx * 0.38)));
 
-        let fillRatios = [];
-        let maxRatio = -1;
-        let selectedIdx = -1;
+        let fillDensities = [];
 
-        labels.forEach((label, idx) => {
-          let bubbleCenterX = Math.floor(itemStartX + (idx * W * optionWidthRatio));
-          let radius = Math.floor(W * 0.0125);
+        labels.forEach((_, idx) => {
+          let centerX = Math.floor(itemX + (idx * W * colWidthRatio));
+          let radius = Math.floor(W * 0.012);
 
-          let fillCount = 0;
-          let totalPixels = 0;
+          let filledPixels = 0;
+          let count = 0;
 
-          for (let py = rowCenterY - radius; py <= rowCenterY + radius; py++) {
-            for (let px = bubbleCenterX - radius; px <= bubbleCenterX + radius; px++) {
+          for (let py = centerY - radius; py <= centerY + radius; py++) {
+            for (let px = centerX - radius; px <= centerX + radius; px++) {
               if (px >= 0 && px < W && py >= 0 && py < H) {
-                let dist = Math.sqrt(Math.pow(px - bubbleCenterX, 2) + Math.pow(py - rowCenterY, 2));
-                if (dist <= radius) {
-                  totalPixels++;
-                  if (warped.ucharPtr(py, px)[0] > 0) {
-                    fillCount++;
-                  }
+                if (Math.hypot(px - centerX, py - centerY) <= radius) {
+                  count++;
+                  if (warped.ucharPtr(py, px)[0] > 0) filledPixels++;
                 }
               }
             }
           }
-
-          let ratio = fillCount / (totalPixels || 1);
-          fillRatios.push(ratio);
-
-          if (ratio > maxRatio) {
-            maxRatio = ratio;
-            selectedIdx = idx;
-          }
+          fillDensities.push(filledPixels / (count || 1));
         });
 
-        let sortedRatios = [...fillRatios].sort((a, b) => b - a);
-        let topRatio = sortedRatios[0];
-        let runnerUpRatio = sortedRatios[1];
+        // Compute local mean & standard deviation to prevent false positives from shadows
+        let sum = fillDensities.reduce((a, b) => a + b, 0);
+        let mean = sum / fillDensities.length;
+        let stdDev = Math.sqrt(fillDensities.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / fillDensities.length);
 
-        // Ensure clear selection contrast compared to secondary bubbles
-        if (topRatio > 0.30 && (topRatio - runnerUpRatio) > 0.15) {
-          detectedAnswers[i] = labels[selectedIdx];
+        let maxVal = Math.max(...fillDensities);
+        let maxIdx = fillDensities.indexOf(maxVal);
+
+        // Z-Score Threshold Validation
+        if (maxVal > 0.25 && (stdDev === 0 || (maxVal - mean) / stdDev > 1.2)) {
+          detected[i] = labels[maxIdx];
         } else {
-          detectedAnswers[i] = 'N/A';
+          detected[i] = 'N/A';
         }
       }
 
-      src.delete(); gray.delete(); thresholded.delete(); contours.delete(); hierarchy.delete(); warped.delete();
-      return detectedAnswers;
+      src.delete(); gray.delete(); blur.delete(); thresh.delete(); contours.delete(); hierarchy.delete(); warped.delete();
+      return detected;
     }
 
     function captureAndGrade() {
       if (!isOpenCvLoaded) {
-        alert('OpenCV.js engine is still loading. Please wait a moment...');
+        alert('OpenCV is initializing. Please retry in a few seconds.');
         return;
       }
 
-      const section = document.getElementById('scan-section').value || 'Default-Section';
+      const section = document.getElementById('scan-section').value || 'Unassigned';
       const totalItems = Object.keys(answerKey).length;
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
-      
-      if (totalItems === 0) {
-        alert('Please configure an answer key first.');
-        return;
-      }
 
-      const detectedAnswers = analyzeRealOMRSheet('scan-canvas', totalItems, choicesCount);
+      const detected = runOMREngine('scan-canvas', totalItems, choicesCount);
 
-      let correctCount = 0;
+      let correct = 0;
       for (let i = 1; i <= totalItems; i++) {
-        if (detectedAnswers[i] && detectedAnswers[i] === answerKey[i]) {
-          correctCount++;
-        }
+        if (detected[i] && detected[i] === answerKey[i]) correct++;
       }
 
+      const scorePct = ((correct / totalItems) * 100).toFixed(1);
       const studentName = "Student " + Math.floor(1000 + Math.random() * 9000);
-      const scorePct = ((correctCount / totalItems) * 100).toFixed(1);
-      
-      const newRecord = {
+
+      records.push({
         id: Date.now(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         name: studentName,
         section: section,
-        score: `${correctCount}/${totalItems}`,
+        score: `${correct}/${totalItems}`,
         percentage: `${scorePct}%`
-      };
+      });
 
-      records.push(newRecord);
       updateRecordsTable();
       closeCameraModal();
-      showResultModal(studentName, section, `${correctCount}/${totalItems}`, `${scorePct}%`);
-    }
-
-    function showResultModal(name, section, score, percentage) {
-      document.getElementById('result-student-name').innerText = name;
-      document.getElementById('result-section').innerText = `Section: ${section}`;
-      document.getElementById('result-score').innerText = score;
-      document.getElementById('result-percentage').innerText = percentage;
-      
-      document.getElementById('result-modal').classList.remove('hidden');
-    }
-
-    function closeResultModal() {
-      document.getElementById('result-modal').classList.add('hidden');
+      alert(`Scanned: ${studentName}\nScore: ${correct}/${totalItems} (${scorePct}%)`);
     }
 
     function updateRecordsTable() {
@@ -615,29 +477,18 @@
 
       records.forEach(rec => {
         tbody.innerHTML += `
-          <tr class="hover:bg-slate-800/40 border-b border-slate-800/50">
-            <td class="p-2 sm:p-3 text-[11px] sm:text-xs text-slate-400">${rec.timestamp}</td>
-            <td class="p-2 sm:p-3">
-              <input type="text" value="${rec.name}" onchange="editRecord(${rec.id}, 'name', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500">
-            </td>
-            <td class="p-2 sm:p-3">
-              <input type="text" value="${rec.section}" onchange="editRecord(${rec.id}, 'section', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500">
-            </td>
-            <td class="p-2 sm:p-3 font-semibold text-indigo-300">${rec.score}</td>
-            <td class="p-2 sm:p-3 font-semibold text-emerald-400">${rec.percentage}</td>
-            <td class="p-2 sm:p-3 text-right">
-              <button onclick="deleteRecord(${rec.id})" class="text-rose-400 hover:text-rose-300 p-1">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
+          <tr class="hover:bg-slate-800/40 border-b border-slate-800">
+            <td class="p-3 text-slate-400">${rec.timestamp}</td>
+            <td class="p-3 font-medium text-white">${rec.name}</td>
+            <td class="p-3 text-slate-300">${rec.section}</td>
+            <td class="p-3 font-semibold text-indigo-300">${rec.score}</td>
+            <td class="p-3 font-semibold text-emerald-400">${rec.percentage}</td>
+            <td class="p-3 text-right">
+              <button onclick="deleteRecord(${rec.id})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash-can"></i></button>
             </td>
           </tr>
         `;
       });
-    }
-
-    function editRecord(id, field, val) {
-      const rec = records.find(r => r.id === id);
-      if (rec) rec[field] = val;
     }
 
     function deleteRecord(id) {
@@ -646,16 +497,7 @@
     }
 
     async function syncToGoogleSheets() {
-      if (GAS_WEB_APP_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE" || !GAS_WEB_APP_URL) {
-        alert('Please update the GAS_WEB_APP_URL variable inside the script section with your deployed Google Apps Script URL.');
-        return;
-      }
-
-      if (records.length === 0) {
-        alert('No scanned records available to push.');
-        return;
-      }
-
+      if (!GAS_WEB_APP_URL || records.length === 0) return;
       try {
         await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
@@ -663,7 +505,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(records)
         });
-        alert('Data successfully dispatched to Google Sheets!');
+        alert('Data synced to Google Sheets.');
       } catch (err) {
         alert('Sync error: ' + err.message);
       }
