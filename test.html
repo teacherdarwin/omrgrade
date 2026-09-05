@@ -593,17 +593,22 @@
       // Student ID Section Render
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(9);
-      doc.text('STUDENT ID', layout.idStartX - 2, layout.idStartY - 11);
+      doc.text('STUDENT ID', layout.idStartX - 2, layout.idStartY - 13);
       
       doc.setFontSize(6);
       doc.setFont('Helvetica', 'normal');
-      doc.text('Write ID in boxes & fill bubbles', layout.idStartX - 2, layout.idStartY - 7);
+      doc.text('Write ID in boxes & fill bubbles', layout.idStartX - 2, layout.idStartY - 9);
 
-      // Draw ID Digits Boxes (7 Boxes)
+      // Draw ID Digits Boxes (7 Boxes, perfectly centered over each bubble column)
+      const firstBubbleY = idBubbleMM(0, 0, layout).y;
+      const boxWidth = 5;
+      const boxHeight = 5;
+      const boxY = firstBubbleY - layout.bubbleRadius - boxHeight - 1.5;
+
       for (let c = 0; c < layout.idDigits; c++) {
-        const boxX = layout.idStartX + c * layout.idStepX - 2.5;
-        const boxY = layout.idStartY - 5;
-        doc.rect(boxX, boxY, 5, 4.5);
+        const columnX = idBubbleMM(c, 0, layout).x;
+        const boxX = columnX - (boxWidth / 2);
+        doc.rect(boxX, boxY, boxWidth, boxHeight);
       }
 
       // Draw Student ID Bubble Grid (7 Cols x 10 Rows [0-9])
