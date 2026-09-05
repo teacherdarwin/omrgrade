@@ -270,7 +270,6 @@
     let videoStream = null;
     let isOpenCvLoaded = false;
 
-    // OpenCV.js Initialization Listener
     function onOpenCvReady() {
       isOpenCvLoaded = true;
       const statusEl = document.getElementById('cv-status');
@@ -386,7 +385,6 @@
       doc.save(`Answer_Sheet_${itemCount}_Items.pdf`);
     }
 
-    // Modal Camera Operations
     async function openCameraModal() {
       const modal = document.getElementById('camera-modal');
       modal.classList.remove('hidden');
@@ -434,7 +432,7 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // Integrated OpenCV.js Real-Time OMR Analysis
+    // Advanced Computer Vision Scanner using Perspective Warp and Relative Density Matching
     function analyzeRealOMRSheet(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
@@ -443,41 +441,83 @@
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
       cv.adaptiveThreshold(gray, thresholded, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 15, 8);
 
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(thresholded, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      let centers = [];
+      for (let i = 0; i < contours.size(); ++i) {
+        let cnt = contours.get(i);
+        let rect = cv.boundingRect(cnt);
+        let aspectRatio = rect.width / parseFloat(rect.height);
+        let area = rect.width * rect.height;
+
+        // Filter for square alignment markers
+        if (aspectRatio >= 0.7 && aspectRatio <= 1.3 && area > 100 && area < 10000) {
+          centers.push({
+            x: rect.x + rect.width / 2,
+            y: rect.y + rect.height / 2
+          });
+        }
+      }
+
+      let warped = new cv.Mat();
+      let W = 800, H = 1000;
+
+      // Determine standard boundaries if perspective transform fails
+      if (centers.length >= 4) {
+        centers.sort((a, b) => a.y - b.y);
+        let topTwo = centers.slice(0, 2).sort((a, b) => a.x - b.x);
+        let bottomTwo = centers.slice(-2).sort((a, b) => a.x - b.x);
+
+        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+          topTwo[0].x, topTwo[0].y,
+          topTwo[1].x, topTwo[1].y,
+          bottomTwo[1].x, bottomTwo[1].y,
+          bottomTwo[0].x, bottomTwo[0].y
+        ]);
+        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
+        let M = cv.getPerspectiveTransform(srcTri, dstTri);
+        
+        cv.warpPerspective(thresholded, warped, M, new cv.Size(W, H));
+        srcTri.delete(); dstTri.delete(); M.delete();
+      } else {
+        cv.resize(thresholded, warped, new cv.Size(W, H));
+      }
+
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       let detectedAnswers = {};
-      
-      const width = thresholded.cols;
-      const height = thresholded.rows;
 
-      const startXRatio = 0.22;
-      const startYRatio = 0.22;
-      const itemRowHeightRatio = 0.035;
+      const startXRatio = 0.14;
+      const startYRatio = 0.20;
+      const itemRowHeightRatio = 0.028;
       const optionWidthRatio = 0.045;
 
       for (let i = 1; i <= totalItems; i++) {
         let colIndex = Math.floor((i - 1) / 20);
         let rowIndex = (i - 1) % 20;
 
-        let rowCenterY = Math.floor(height * (startYRatio + (rowIndex * itemRowHeightRatio)));
-        let itemStartX = Math.floor(width * (startXRatio + (colIndex * 0.38)));
+        let rowCenterY = Math.floor(H * (startYRatio + (rowIndex * itemRowHeightRatio)));
+        let itemStartX = Math.floor(W * (startXRatio + (colIndex * 0.38)));
 
-        let maxFill = -1;
-        let selectedChoice = 'N/A';
+        let fillRatios = [];
+        let maxRatio = -1;
+        let selectedIdx = -1;
 
         labels.forEach((label, idx) => {
-          let bubbleCenterX = Math.floor(itemStartX + (idx * width * optionWidthRatio));
-          let radius = Math.floor(width * 0.015);
+          let bubbleCenterX = Math.floor(itemStartX + (idx * W * optionWidthRatio));
+          let radius = Math.floor(W * 0.012);
 
           let fillCount = 0;
           let totalPixels = 0;
 
           for (let py = rowCenterY - radius; py <= rowCenterY + radius; py++) {
             for (let px = bubbleCenterX - radius; px <= bubbleCenterX + radius; px++) {
-              if (px >= 0 && px < width && py >= 0 && py < height) {
+              if (px >= 0 && px < W && py >= 0 && py < H) {
                 let dist = Math.sqrt(Math.pow(px - bubbleCenterX, 2) + Math.pow(py - rowCenterY, 2));
                 if (dist <= radius) {
                   totalPixels++;
-                  if (thresholded.ucharPtr(py, px)[0] > 0) {
+                  if (warped.ucharPtr(py, px)[0] > 0) {
                     fillCount++;
                   }
                 }
@@ -485,17 +525,27 @@
             }
           }
 
-          let fillRatio = fillCount / (totalPixels || 1);
-          if (fillRatio > 0.35 && fillRatio > maxFill) {
-            maxFill = fillRatio;
-            selectedChoice = label;
+          let ratio = fillCount / (totalPixels || 1);
+          fillRatios.push(ratio);
+
+          if (ratio > maxRatio) {
+            maxRatio = ratio;
+            selectedIdx = idx;
           }
         });
 
-        detectedAnswers[i] = selectedChoice;
+        let sumRatio = fillRatios.reduce((a, b) => a + b, 0);
+        let avgRatio = sumRatio / fillRatios.length;
+
+        // Verify that the chosen bubble is distinctly darker than the row average
+        if (maxRatio > 0.35 && maxRatio > (avgRatio + 0.15)) {
+          detectedAnswers[i] = labels[selectedIdx];
+        } else {
+          detectedAnswers[i] = 'N/A';
+        }
       }
 
-      src.delete(); gray.delete(); thresholded.delete();
+      src.delete(); gray.delete(); thresholded.delete(); contours.delete(); hierarchy.delete(); warped.delete();
       return detectedAnswers;
     }
 
