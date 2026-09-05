@@ -3,54 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoGrader</title>
+  <title>OMR AutoGrader - High Precision CV</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
   <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
-  
+
   <style>
     body {
       background: radial-gradient(circle at 15% 15%, rgba(147, 51, 234, 0.15), transparent 40%),
                   radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.15), transparent 40%),
-                  radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.1), transparent 50%),
                   #0f172a;
       background-attachment: fixed;
       color: #f8fafc;
       font-family: system-ui, -apple-system, sans-serif;
     }
-
     .aurora-card {
       background: rgba(30, 41, 59, 0.75);
       backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.12);
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
-
-    .aurora-modal {
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      box-shadow: 0 0 40px rgba(99, 102, 241, 0.25);
-    }
-
     .aurora-btn {
       background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
       transition: all 0.3s ease;
     }
-
-    .aurora-btn:hover {
-      opacity: 0.9;
-      box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
-    }
-
-    .key-bubble {
+    .aurora-btn:hover { opacity: 0.9; box-shadow: 0 0 20px rgba(168, 85, 247, 0.4); }
+    .aurora-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+    .ghost-btn {
+      background: rgba(148, 163, 184, 0.1);
+      border: 1px solid rgba(148, 163, 184, 0.3);
       transition: all 0.2s ease;
     }
+    .ghost-btn:hover { background: rgba(148, 163, 184, 0.2); }
     .key-bubble.selected {
       background-color: #6366f1;
       border-color: #a855f7;
@@ -58,6 +43,10 @@
       box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
       transform: scale(1.05);
     }
+    .status-dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+    @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);} 100% { box-shadow: 0 0 0 12px rgba(52, 211, 153, 0);} }
+    .pulse-live { animation: pulse-ring 1.4s ease-out infinite; }
+    .hidden-canvas { display: none; }
   </style>
 </head>
 <body class="min-h-screen pb-12 text-slate-100">
@@ -67,36 +56,32 @@
       <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
         <div class="flex items-center space-x-3">
           <div class="p-2 bg-indigo-600/30 rounded-lg border border-indigo-400/30">
-            <i class="fa-solid fa-check-double text-indigo-400 text-xl"></i>
+            <i class="fa-solid fa-microchip text-indigo-400 text-xl"></i>
           </div>
           <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400">
-            OMR AutoGrader
+            Precision OMR Engine
           </h1>
         </div>
         <span id="cv-status" class="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-          Loading CV Engine...
+          Loading OpenCV...
         </span>
       </div>
-      
-      <div class="grid grid-cols-3 gap-2 w-full sm:w-auto text-center">
-        <button onclick="switchTab('generator')" id="tab-generator" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium aurora-btn text-white">
-          <i class="fa-solid fa-file-pdf sm:mr-2"></i><span class="hidden sm:inline">Sheet </span>Generator
-        </button>
-        <button onclick="switchTab('scanner')" id="tab-scanner" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-          <i class="fa-solid fa-camera sm:mr-2"></i>Scanner
-        </button>
-        <button onclick="switchTab('records')" id="tab-records" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-          <i class="fa-solid fa-list-check sm:mr-2"></i>Records (<span id="record-count">0</span>)
-        </button>
+
+      <div class="grid grid-cols-4 gap-2 w-full sm:w-auto text-center">
+        <button onclick="switchTab('generator')" id="tab-generator" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium aurora-btn text-white">Generator</button>
+        <button onclick="switchTab('scanner')" id="tab-scanner" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Scanner</button>
+        <button onclick="switchTab('records')" id="tab-records" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Records (<span id="record-count">0</span>)</button>
+        <button onclick="switchTab('analysis')" id="tab-analysis" class="px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Analysis</button>
       </div>
     </div>
   </header>
 
   <main class="max-w-7xl mx-auto px-4">
 
+    <!-- GENERATOR -->
     <section id="sec-generator" class="space-y-6">
       <div class="aurora-card p-4 sm:p-6 rounded-2xl">
-        <h2 class="text-lg font-semibold mb-4 text-indigo-300"><i class="fa-solid fa-sliders mr-2"></i>Configure Printable Sheet</h2>
+        <h2 class="text-lg font-semibold mb-4 text-indigo-300"><i class="fa-solid fa-sliders mr-2"></i>Sheet Layout Setup</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <label class="block text-xs font-medium text-slate-400 mb-1">Number of Test Items</label>
@@ -109,273 +94,415 @@
               <option value="5">5 Choices (A, B, C, D, E)</option>
             </select>
           </div>
-          <div class="sm:col-span-2 lg:col-span-1 flex items-end">
-            <button onclick="generatePDFSheet()" class="w-full aurora-btn py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center">
-              <i class="fa-solid fa-file-arrow-down mr-2"></i>Generate Printable PDF Sheet
+          <div class="flex items-end">
+            <label class="flex items-center gap-2 text-xs text-slate-400 mb-2.5">
+              <input type="checkbox" id="gen-mark-key" class="accent-indigo-500 w-4 h-4">
+              Stamp "ANSWER KEY" on this copy
+            </label>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-4 leading-relaxed">
+          Print one <strong>marked</strong> copy for yourself to build the answer key (fill it in and scan it in the Scanner tab), then print blank copies for students. Keep the item count and choice count identical across both — the scanner samples bubbles at fixed positions on this exact layout.
+        </p>
+        <button onclick="generatePDFSheet()" class="mt-4 w-full sm:w-auto aurora-btn px-6 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center">
+          <i class="fa-solid fa-file-arrow-down mr-2"></i>Download High-Precision PDF
+        </button>
+      </div>
+    </section>
+
+    <!-- SCANNER -->
+    <section id="sec-scanner" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Answer key manager -->
+        <div class="lg:col-span-5 aurora-card p-4 sm:p-6 rounded-2xl space-y-4">
+          <h2 class="text-lg font-semibold text-indigo-300"><i class="fa-solid fa-key mr-2"></i>Answer Keys</h2>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Load Saved Key</label>
+            <select id="section-select" onchange="loadSectionIntoEditor(this.value)" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+              <option value="">— New key —</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Section / Exam Name</label>
+            <input type="text" id="key-section-name" placeholder="e.g. Math-101" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Items</label>
+              <input type="number" id="key-item-count" min="5" max="100" value="20" onchange="buildKeyEditor()" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Choices</label>
+              <select id="key-choices-count" onchange="buildKeyEditor()" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                <option value="4">4 (A–D)</option>
+                <option value="5">5 (A–E)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="key-container" class="max-h-64 overflow-y-auto space-y-2 pr-1 border border-slate-800 p-3 rounded-xl bg-slate-950/60"></div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="openCameraModal('key')" class="ghost-btn py-2 rounded-lg text-xs font-semibold text-indigo-200 flex items-center justify-center">
+              <i class="fa-solid fa-camera mr-2"></i>Scan Key From Sheet
+            </button>
+            <button onclick="saveCurrentKey()" class="aurora-btn py-2 rounded-lg text-xs font-semibold text-white flex items-center justify-center">
+              <i class="fa-solid fa-floppy-disk mr-2"></i>Save Key
+            </button>
+          </div>
+          <button onclick="deleteCurrentSection()" class="w-full text-xs text-rose-400 hover:text-rose-300 py-1">
+            <i class="fa-solid fa-trash-can mr-1"></i>Delete this section's key
+          </button>
+        </div>
+
+        <!-- Grading -->
+        <div class="lg:col-span-7 aurora-card p-6 rounded-2xl flex flex-col items-center justify-center text-center space-y-4">
+          <i class="fa-solid fa-camera-viewfinder text-5xl text-indigo-400"></i>
+          <h2 class="text-xl font-bold text-slate-100">Grade Student Sheets</h2>
+          <p class="text-xs text-slate-400 max-w-md">
+            Pick a section with a saved key, then start scanning. The camera grades sheets automatically and continuously — just feed one sheet after another, no shutter button needed.
+          </p>
+          <div class="w-full max-w-sm text-left">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Section to Grade Against</label>
+            <select id="grade-section-select" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+              <option value="">— No saved keys yet —</option>
+            </select>
+          </div>
+          <button id="start-grading-btn" onclick="openCameraModal('grade')" class="w-full max-w-sm aurora-btn py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm" disabled>
+            <i class="fa-solid fa-play mr-2"></i>Start Live Scanning
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECORDS -->
+    <section id="sec-records" class="hidden space-y-6">
+      <div class="aurora-card p-4 sm:p-6 rounded-2xl">
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
+          <h2 class="text-lg font-semibold text-indigo-300"><i class="fa-solid fa-table-list mr-2"></i>Scanned Results</h2>
+          <div class="flex items-center gap-2">
+            <select id="records-filter" onchange="updateRecordsTable()" class="bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <option value="">All sections</option>
+            </select>
+            <button onclick="exportCSV()" class="ghost-btn px-3 py-2 rounded-lg text-xs font-semibold text-indigo-200">
+              <i class="fa-solid fa-file-csv mr-2"></i>Export CSV
+            </button>
+            <button onclick="syncToGoogleSheets()" class="aurora-btn px-4 py-2 rounded-lg text-sm font-semibold text-white">
+              <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Sync
             </button>
           </div>
         </div>
-      </div>
-    </section>
-
-    <section id="sec-scanner" class="hidden space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        <div class="lg:col-span-5 aurora-card p-4 sm:p-6 rounded-2xl space-y-5 flex flex-col justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-indigo-300 mb-4"><i class="fa-solid fa-key mr-2"></i>Answer Key & Class Setup</h2>
-            
-            <div class="mb-4">
-              <label class="block text-xs font-medium text-slate-400 mb-1">Active Class Section</label>
-              <input type="text" id="scan-section" placeholder="e.g. 10-Gold" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
-            </div>
-
-            <div>
-              <div class="flex justify-between items-center mb-2">
-                <label class="text-xs font-medium text-slate-400">Tap to Select Correct Answer</label>
-                <button onclick="buildKeyInputs()" class="text-xs text-indigo-400 hover:text-indigo-300">Reset Key</button>
-              </div>
-              
-              <div id="key-container" class="max-h-72 sm:max-h-80 overflow-y-auto space-y-2 pr-1 border border-slate-800/80 p-3 rounded-xl bg-slate-950/60">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="lg:col-span-7 aurora-card p-6 sm:p-8 rounded-2xl flex flex-col items-center justify-center text-center">
-          <div class="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-full mb-4">
-            <i class="fa-solid fa-camera-viewfinder text-4xl text-indigo-400"></i>
-          </div>
-          <h2 class="text-xl font-bold text-slate-100 mb-2">Ready to Scan Exam Sheets</h2>
-          <p class="text-xs text-slate-400 max-w-md mb-6">Launch the scanner camera modal to align the answer sheet inside the live computer vision viewport.</p>
-          
-          <button onclick="openCameraModal()" class="w-full max-w-sm aurora-btn py-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm sm:text-base">
-            <i class="fa-solid fa-expand mr-2"></i>Launch Scanner Viewport
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section id="sec-records" class="hidden space-y-6">
-      <div class="aurora-card p-4 sm:p-6 rounded-2xl">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h2 class="text-lg font-semibold text-indigo-300"><i class="fa-solid fa-table-list mr-2"></i>Scanned Results Logs</h2>
-            <p class="text-xs text-slate-400">Edit values if needed before syncing.</p>
-          </div>
-          <button onclick="syncToGoogleSheets()" class="w-full sm:w-auto aurora-btn px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center">
-            <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Sync All to Google Sheets
-          </button>
-        </div>
-
         <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs sm:text-sm text-slate-300 min-w-[500px]">
-            <thead class="bg-slate-900/80 text-[10px] sm:text-xs uppercase text-slate-400 border-b border-slate-700">
+          <table class="w-full text-left text-xs sm:text-sm text-slate-300">
+            <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 border-b border-slate-700">
               <tr>
-                <th class="p-2 sm:p-3">Time</th>
-                <th class="p-2 sm:p-3">Student Name</th>
-                <th class="p-2 sm:p-3">Section</th>
-                <th class="p-2 sm:p-3">Score</th>
-                <th class="p-2 sm:p-3">Percentage</th>
-                <th class="p-2 sm:p-3 text-right">Action</th>
+                <th class="p-3">Time</th>
+                <th class="p-3">Student Name</th>
+                <th class="p-3">Section</th>
+                <th class="p-3">Score</th>
+                <th class="p-3">Percentage</th>
+                <th class="p-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody id="records-table-body" class="divide-y divide-slate-800">
-            </tbody>
+            <tbody id="records-table-body" class="divide-y divide-slate-800"></tbody>
           </table>
+          <p id="records-empty" class="text-xs text-slate-500 text-center py-8 hidden">No scans yet. Head to the Scanner tab to grade some sheets.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYSIS -->
+    <section id="sec-analysis" class="hidden space-y-6">
+      <div class="aurora-card p-4 sm:p-6 rounded-2xl">
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
+          <h2 class="text-lg font-semibold text-indigo-300"><i class="fa-solid fa-chart-column mr-2"></i>Item Analysis</h2>
+          <select id="analysis-section-select" onchange="updateAnalysisTable()" class="bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <option value="">— Select a section —</option>
+          </select>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm text-slate-300">
+            <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="p-3">Item</th>
+                <th class="p-3">Key Answer</th>
+                <th class="p-3">Responses</th>
+                <th class="p-3">% Correct</th>
+                <th class="p-3">Flag</th>
+              </tr>
+            </thead>
+            <tbody id="analysis-table-body" class="divide-y divide-slate-800"></tbody>
+          </table>
+          <p id="analysis-empty" class="text-xs text-slate-500 text-center py-8">Select a section with scanned results to see per-question difficulty.</p>
         </div>
       </div>
     </section>
 
   </main>
 
+  <!-- CAMERA MODAL -->
   <div id="camera-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-    <div class="aurora-modal w-full max-w-xl rounded-2xl overflow-hidden flex flex-col">
+    <div class="aurora-card w-full max-w-4xl rounded-2xl overflow-hidden flex flex-col max-h-[95vh]">
       <div class="p-4 border-b border-slate-700/60 flex justify-between items-center bg-slate-900/50">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-camera-retro text-indigo-400"></i>
-          <h3 class="font-semibold text-indigo-200 text-sm sm:text-base">Optical Scanner Viewport</h3>
-        </div>
-        <button onclick="closeCameraModal()" class="text-slate-400 hover:text-white p-1">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
+        <h3 id="modal-title" class="font-semibold text-indigo-200 text-sm">Align Sheet Within Viewport</h3>
+        <button onclick="closeCameraModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
-
-      <div class="p-4 flex flex-col items-center">
-        <div class="relative w-full aspect-[3/4] max-h-[60vh] bg-slate-950 rounded-xl overflow-hidden border border-slate-700/80 flex items-center justify-center">
-          <video id="webcam" class="hidden" playsinline></video>
-          <canvas id="scan-canvas" class="w-full h-full object-cover"></canvas>
-          
-          <div id="camera-overlay" class="absolute inset-0 pointer-events-none border-2 border-dashed border-indigo-500/40 m-4 sm:m-6 rounded-lg flex flex-col justify-between p-3">
-            <div class="flex justify-between">
-              <div class="w-5 h-5 border-t-4 border-l-4 border-indigo-400"></div>
-              <div class="w-5 h-5 border-t-4 border-r-4 border-indigo-400"></div>
+      <div class="p-4 overflow-y-auto">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div class="relative w-full aspect-[3/4] max-h-[55vh] bg-slate-950 rounded-xl overflow-hidden border border-slate-700/80">
+              <video id="webcam" class="hidden" playsinline></video>
+              <canvas id="scan-canvas" class="w-full h-full object-cover"></canvas>
             </div>
-            <p class="text-center text-[10px] sm:text-xs text-indigo-300/90 bg-slate-900/85 backdrop-blur py-1 px-3 rounded-full self-center border border-indigo-500/30">
-              Align sheet corner boxes inside frame
-            </p>
-            <div class="flex justify-between">
-              <div class="w-5 h-5 border-b-4 border-l-4 border-indigo-400"></div>
-              <div class="w-5 h-5 border-b-4 border-r-4 border-indigo-400"></div>
+            <div class="flex items-center gap-2 mt-3 text-xs">
+              <span id="scan-status-dot" class="status-dot bg-amber-400"></span>
+              <span id="scan-status" class="text-slate-300">Looking for the sheet's 4 corner markers…</span>
+            </div>
+          </div>
+          <div class="flex flex-col">
+            <p class="text-xs font-medium text-slate-400 mb-2">Detected Sheet Preview</p>
+            <div class="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-700/80 flex items-center justify-center" style="min-height:260px;">
+              <canvas id="preview-canvas" width="320" height="400" class="max-w-full"></canvas>
+            </div>
+            <div id="scan-toast" class="mt-3 text-sm font-semibold text-center py-2 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-400">
+              Waiting for first scan…
             </div>
           </div>
         </div>
-
-        <button id="scan-btn" onclick="captureAndGrade()" class="mt-4 w-full aurora-btn py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center text-sm sm:text-base">
-          <i class="fa-solid fa-bolt mr-2"></i>Scan & Grade Sheet
-        </button>
+        <div id="key-apply-row" class="hidden mt-4 flex gap-2">
+          <button onclick="applyScannedKey()" class="flex-1 aurora-btn py-3 rounded-xl font-bold text-white shadow-lg text-sm">
+            <i class="fa-solid fa-check mr-2"></i>Use This Detected Key
+          </button>
+          <button onclick="resumeScanLoop()" class="flex-1 ghost-btn py-3 rounded-xl font-bold text-slate-200 text-sm">
+            Rescan
+          </button>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-2">
+          <button onclick="manualCapture()" class="ghost-btn py-3 rounded-xl font-semibold text-slate-200 text-sm">
+            <i class="fa-solid fa-bolt mr-2"></i>Capture Now (manual)
+          </button>
+          <button onclick="closeCameraModal()" class="ghost-btn py-3 rounded-xl font-semibold text-slate-200 text-sm">
+            <i class="fa-solid fa-stop mr-2"></i>Done Scanning
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <div id="result-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-    <div class="aurora-modal w-full max-w-md rounded-2xl overflow-hidden p-6 text-center space-y-5 border border-indigo-500/40">
-      <div id="result-badge-icon" class="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 text-3xl">
-        <i class="fa-solid fa-graduation-cap"></i>
-      </div>
-
-      <div>
-        <h3 class="text-xs uppercase tracking-widest text-indigo-300 font-semibold mb-1">Grading Completed</h3>
-        <h2 id="result-student-name" class="text-xl font-bold text-white">Student Name</h2>
-        <p id="result-section" class="text-xs text-slate-400">Section: 10-Gold</p>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
-        <div class="p-2 border-r border-slate-800">
-          <p class="text-[10px] uppercase text-slate-400 font-medium">Score</p>
-          <p id="result-score" class="text-2xl font-black text-indigo-400">18 / 20</p>
-        </div>
-        <div class="p-2">
-          <p class="text-[10px] uppercase text-slate-400 font-medium">Percentage</p>
-          <p id="result-percentage" class="text-2xl font-black text-emerald-400">90.0%</p>
-        </div>
-      </div>
-
-      <div class="flex gap-3">
-        <button onclick="closeResultModal()" class="w-full py-2.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-          Close
-        </button>
-        <button onclick="closeResultModal(); openCameraModal();" class="w-full aurora-btn py-2.5 rounded-lg text-xs font-semibold text-white">
-          Scan Next
-        </button>
-      </div>
-    </div>
-  </div>
+  <canvas id="warp-buffer" width="800" height="1000" class="hidden-canvas"></canvas>
 
   <script>
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxnHWidcXhKLdP4N2PM15bVfrxKi_LDgc6D7iQ7y7ez4-l5FCg-yaXMcUWiwoSMWR8/exec";
+    const STORE_SECTIONS = 'omr:sections';
+    const STORE_RECORDS = 'omr:records';
+    const SCAN_INTERVAL_MS = 650;
+    const STABLE_HITS_REQUIRED = 3;
+    const COOLDOWN_MS = 2200;
 
-    let records = [];
-    let answerKey = {};
+    let sections = {};        // { name: { itemCount, choicesCount, key: {1:'A',...} } }
+    let records = [];         // { id, timestamp, name, section, score, total, percentage, answers }
+    let editorSelections = {}; // current key-editor bubble state {1:'A',...}
+
     let isCameraActive = false;
     let videoStream = null;
     let isOpenCvLoaded = false;
 
-    // OpenCV.js Initialization Listener
+    let cameraMode = null;       // 'key' | 'grade'
+    let activeSection = null;    // section name being graded against
+    let scanTimer = null;
+    let scanCooldownUntil = 0;
+    let lastSig = null;
+    let stableHits = 0;
+    let pendingScannedKey = null;
+
+    // ---------- Persistence ----------
+    async function loadState() {
+      try {
+        const s = await window.storage.get(STORE_SECTIONS, false);
+        sections = s ? JSON.parse(s.value) : {};
+      } catch (e) { sections = {}; }
+      try {
+        const r = await window.storage.get(STORE_RECORDS, false);
+        records = r ? JSON.parse(r.value) : [];
+      } catch (e) { records = []; }
+      refreshSectionDropdowns();
+      updateRecordsTable();
+    }
+
+    async function saveSections() {
+      try { await window.storage.set(STORE_SECTIONS, JSON.stringify(sections), false); }
+      catch (e) { console.error('Failed to save sections', e); }
+    }
+
+    async function saveRecords() {
+      try { await window.storage.set(STORE_RECORDS, JSON.stringify(records), false); }
+      catch (e) { console.error('Failed to save records', e); }
+    }
+
+    // ---------- OpenCV ----------
     function onOpenCvReady() {
       isOpenCvLoaded = true;
       const statusEl = document.getElementById('cv-status');
       statusEl.innerText = "CV Engine Ready";
       statusEl.className = "text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      refreshGradeButtonState();
     }
 
+    // ---------- Tabs ----------
     function switchTab(tab) {
-      ['generator', 'scanner', 'records'].forEach(t => {
+      ['generator', 'scanner', 'records', 'analysis'].forEach(t => {
         document.getElementById(`sec-${t}`).classList.add('hidden');
         document.getElementById(`tab-${t}`).className = "px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700";
       });
       document.getElementById(`sec-${tab}`).classList.remove('hidden');
       document.getElementById(`tab-${tab}`).className = "px-3 py-2 rounded-lg text-xs sm:text-sm font-medium aurora-btn text-white";
+      if (tab === 'analysis') updateAnalysisTable();
     }
 
-    function buildKeyInputs() {
-      const count = parseInt(document.getElementById('gen-item-count').value) || 20;
-      const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
+    // ---------- Key editor ----------
+    function buildKeyEditor(prefillKey) {
+      const count = parseInt(document.getElementById('key-item-count').value) || 20;
+      const choicesCount = parseInt(document.getElementById('key-choices-count').value) || 4;
       const choices = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       const container = document.getElementById('key-container');
-      
+
       container.innerHTML = '';
-      answerKey = {};
+      editorSelections = {};
 
       for (let i = 1; i <= count; i++) {
-        answerKey[i] = 'A';
-
+        const preset = (prefillKey && prefillKey[i]) ? prefillKey[i] : 'A';
+        editorSelections[i] = preset;
         let bubblesHTML = choices.map(c => `
-          <button 
-            type="button"
-            onclick="selectKeyOption(${i}, '${c}', this)" 
-            class="key-bubble key-btn-${i} w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-600 text-xs font-semibold text-slate-300 flex items-center justify-center hover:border-indigo-400 ${c === 'A' ? 'selected' : ''}"
-            data-choice="${c}">
+          <button type="button" onclick="selectKeyOption(${i}, '${c}', this)"
+            class="key-bubble key-btn-${i} w-7 h-7 rounded-full border border-slate-600 text-xs font-semibold text-slate-300 hover:border-indigo-400 ${c === preset ? 'selected' : ''}">
             ${c}
           </button>
         `).join('');
 
         container.innerHTML += `
-          <div class="flex items-center justify-between py-1.5 px-2 rounded-lg bg-slate-900/40 border border-slate-800/40">
+          <div class="flex items-center justify-between py-1 px-2 rounded bg-slate-900/40 border border-slate-800">
             <span class="text-xs font-medium text-indigo-200">Q${i}</span>
-            <div class="flex space-x-1.5 sm:space-x-2">
-              ${bubblesHTML}
-            </div>
+            <div class="flex space-x-1">${bubblesHTML}</div>
           </div>
         `;
       }
     }
 
     function selectKeyOption(item, choice, el) {
-      answerKey[item] = choice;
-      const rowBubbles = document.querySelectorAll(`.key-btn-${item}`);
-      rowBubbles.forEach(b => b.classList.remove('selected'));
+      editorSelections[item] = choice;
+      document.querySelectorAll(`.key-btn-${item}`).forEach(b => b.classList.remove('selected'));
       el.classList.add('selected');
     }
 
-    document.getElementById('gen-item-count').addEventListener('change', buildKeyInputs);
-    document.getElementById('gen-choices-count').addEventListener('change', buildKeyInputs);
-    window.addEventListener('DOMContentLoaded', buildKeyInputs);
+    function refreshSectionDropdowns() {
+      const names = Object.keys(sections).sort();
+      const sectionSelect = document.getElementById('section-select');
+      const gradeSelect = document.getElementById('grade-section-select');
+      const filterSelect = document.getElementById('records-filter');
+      const analysisSelect = document.getElementById('analysis-section-select');
 
+      sectionSelect.innerHTML = '<option value="">— New key —</option>' +
+        names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+
+      gradeSelect.innerHTML = names.length
+        ? names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)} (${sections[n].itemCount} items)</option>`).join('')
+        : '<option value="">— No saved keys yet —</option>';
+
+      filterSelect.innerHTML = '<option value="">All sections</option>' +
+        names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+
+      analysisSelect.innerHTML = '<option value="">— Select a section —</option>' +
+        names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+
+      refreshGradeButtonState();
+    }
+
+    function refreshGradeButtonState() {
+      const gradeSelect = document.getElementById('grade-section-select');
+      const btn = document.getElementById('start-grading-btn');
+      btn.disabled = !gradeSelect.value || !isOpenCvLoaded;
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('grade-section-select').addEventListener('change', refreshGradeButtonState);
+    });
+
+    function loadSectionIntoEditor(name) {
+      document.getElementById('key-section-name').value = name || '';
+      if (!name || !sections[name]) {
+        document.getElementById('key-item-count').value = 20;
+        document.getElementById('key-choices-count').value = '4';
+        buildKeyEditor();
+        return;
+      }
+      const s = sections[name];
+      document.getElementById('key-item-count').value = s.itemCount;
+      document.getElementById('key-choices-count').value = String(s.choicesCount);
+      buildKeyEditor(s.key);
+    }
+
+    async function saveCurrentKey() {
+      const name = document.getElementById('key-section-name').value.trim();
+      if (!name) { alert('Give this section/exam a name first.'); return; }
+      const itemCount = parseInt(document.getElementById('key-item-count').value) || 20;
+      const choicesCount = parseInt(document.getElementById('key-choices-count').value) || 4;
+      sections[name] = { itemCount, choicesCount, key: { ...editorSelections } };
+      await saveSections();
+      refreshSectionDropdowns();
+      document.getElementById('section-select').value = name;
+      flashToastOnPage(`Key saved for "${name}"`);
+    }
+
+    async function deleteCurrentSection() {
+      const name = document.getElementById('key-section-name').value.trim();
+      if (!name || !sections[name]) { alert('No saved section selected.'); return; }
+      if (!confirm(`Delete the saved key for "${name}"? Scanned records stay, but grading against it won't be possible until you re-save a key.`)) return;
+      delete sections[name];
+      await saveSections();
+      refreshSectionDropdowns();
+      loadSectionIntoEditor('');
+    }
+
+    // ---------- PDF generation ----------
     function generatePDFSheet() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const itemCount = parseInt(document.getElementById('gen-item-count').value) || 20;
       const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
+      const markAsKey = document.getElementById('gen-mark-key').checked;
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
 
-      // Alignment Markers
       doc.setFillColor(0, 0, 0);
-      doc.rect(10, 10, 8, 8, 'F');
-      doc.rect(192, 10, 8, 8, 'F');
-      doc.rect(10, 279, 8, 8, 'F');
-      doc.rect(192, 279, 8, 8, 'F');
+      doc.rect(10, 10, 12, 12, 'F');
+      doc.rect(188, 10, 12, 12, 'F');
+      doc.rect(10, 275, 12, 12, 'F');
+      doc.rect(188, 275, 12, 12, 'F');
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text('EXAM ANSWER SHEET', 105, 20, { align: 'center' });
+      doc.text('OMR ANSWER SHEET', 105, 18, { align: 'center' });
 
-      // Header Meta Info Box
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.5);
-      doc.rect(25, 26, 160, 26);
-      
-      doc.setFontSize(8);
-      doc.setFont('Helvetica', 'bold');
-      doc.text('STUDENT NAME (30 CHARACTERS MAX):', 28, 31);
-
-      // Render 30 character boxes (2 rows x 15 columns)
-      let boxSize = 4.5;
-      for (let i = 0; i < 30; i++) {
-        let col = i % 15;
-        let row = Math.floor(i / 15);
-        let currentX = 28 + col * (boxSize + 1);
-        let currentY = 33 + row * (boxSize + 1.5);
-        doc.rect(currentX, currentY, boxSize, boxSize);
+      if (markAsKey) {
+        doc.setTextColor(200, 30, 60);
+        doc.setFontSize(11);
+        doc.text('ANSWER KEY COPY', 105, 24, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
       }
 
-      doc.setFont('Helvetica', 'normal');
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.4);
+      doc.rect(25, 26, 160, 18);
       doc.setFontSize(9);
-      doc.text('Section: ____________________', 115, 36);
-      doc.text('Date: ______________', 115, 43);
+      doc.setFont('Helvetica', 'normal');
+      doc.text('Student Name: _________________________________', 28, 33);
+      doc.text('Section: __________________', 28, 39);
+      doc.text('Date: ____________', 130, 39);
 
       let startX = 30;
-      let startY = 60;
+      let startY = 56;
       let yOffset = 0;
       let colOffset = 0;
 
@@ -386,31 +513,48 @@
         doc.text(`${i}.`, currentX, currentY);
 
         labels.forEach((label, idx) => {
-          let bubbleX = currentX + 8 + (idx * 9);
-          doc.circle(bubbleX, currentY - 1.5, 2.5, 'S');
-          doc.setFontSize(7);
-          doc.text(label, bubbleX - 0.8, currentY - 0.5);
+          let bubbleX = currentX + 8 + (idx * 8.5);
+          doc.circle(bubbleX, currentY - 1.2, 2.6, 'S');
+          doc.setFontSize(6.5);
+          doc.text(label, bubbleX - 0.7, currentY - 0.3);
           doc.setFontSize(9);
         });
 
-        yOffset += 8;
+        yOffset += 8.5;
         if (i % 20 === 0) {
           colOffset += 75;
           yOffset = 0;
         }
       }
 
-      doc.save(`Answer_Sheet_${itemCount}_Items.pdf`);
+      doc.save(`OMR_Sheet_${itemCount}_Items${markAsKey ? '_KEY' : ''}.pdf`);
     }
 
-    // Modal Camera Operations
-    async function openCameraModal() {
-      const modal = document.getElementById('camera-modal');
-      modal.classList.remove('hidden');
+    // ---------- Camera ----------
+    async function openCameraModal(mode) {
+      cameraMode = mode;
+      pendingScannedKey = null;
+      document.getElementById('key-apply-row').classList.add('hidden');
+
+      if (mode === 'grade') {
+        activeSection = document.getElementById('grade-section-select').value;
+        if (!activeSection || !sections[activeSection]) { alert('Pick a section with a saved key first.'); return; }
+        document.getElementById('modal-title').innerText = `Grading against "${activeSection}"`;
+      } else {
+        document.getElementById('modal-title').innerText = 'Scan the filled-in answer key sheet';
+      }
+
+      resetScanState();
+      setStatus('Looking for the sheet\u2019s 4 corner markers…', 'amber');
+      setToast(mode === 'key' ? 'Fill in the key sheet and hold it steady.' : 'Waiting for first scan…', 'slate');
+
+      document.getElementById('camera-modal').classList.remove('hidden');
       await startCamera();
+      startScanLoop();
     }
 
     function closeCameraModal() {
+      stopScanLoop();
       stopCamera();
       document.getElementById('camera-modal').classList.add('hidden');
     }
@@ -426,15 +570,13 @@
         isCameraActive = true;
         renderCameraToCanvas();
       } catch (err) {
-        alert('Camera access denied or unavailable: ' + err.message);
+        alert('Camera access denied: ' + err.message);
         closeCameraModal();
       }
     }
 
     function stopCamera() {
-      if (videoStream) {
-        videoStream.getTracks().forEach(t => t.stop());
-      }
+      if (videoStream) videoStream.getTracks().forEach(t => t.stop());
       isCameraActive = false;
     }
 
@@ -451,232 +593,418 @@
       requestAnimationFrame(renderCameraToCanvas);
     }
 
-    // OCR Name Extraction Algorithm using Tesseract.js & OpenCV
-    async function extractStudentNameFromBoxes(canvasId) {
-      let src = cv.imread(canvasId);
-      let gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-
-      const width = gray.cols;
-      const height = gray.rows;
-
-      const startXRatio = 0.14;
-      const startYRatio = 0.12;
-      const boxWidthRatio = 0.021;
-      const boxHeightRatio = 0.028;
-
-      let recognizedChars = [];
-      let cropCanvas = document.createElement('canvas');
-      let cropCtx = cropCanvas.getContext('2d');
-
-      for (let i = 0; i < 30; i++) {
-        let col = i % 15;
-        let row = Math.floor(i / 15);
-
-        let x = Math.floor(width * (startXRatio + (col * (boxWidthRatio + 0.005))));
-        let y = Math.floor(height * (startYRatio + (row * (boxHeightRatio + 0.008))));
-        let w = Math.floor(width * boxWidthRatio);
-        let h = Math.floor(height * boxHeightRatio);
-
-        let rect = new cv.Rect(x, y, w, h);
-        let roi = gray.roi(rect);
-
-        cropCanvas.width = w;
-        cropCanvas.height = h;
-
-        let imgData = new ImageData(new Uint8ClampedArray(roi.data), w, h);
-        cropCtx.putImageData(imgData, 0, 0);
-        roi.delete();
-
-        const { data: { text } } = await Tesseract.recognize(cropCanvas, 'eng', {
-          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ '
-        });
-
-        let char = text.trim().toUpperCase();
-        recognizedChars.push(char !== '' ? char : ' ');
-      }
-
-      src.delete(); gray.delete();
-      return recognizedChars.join('').replace(/\s+/g, ' ').trim();
+    // ---------- Continuous scan loop ----------
+    function resetScanState() {
+      lastSig = null;
+      stableHits = 0;
+      scanCooldownUntil = 0;
     }
 
-    // Integrated OpenCV.js Real-Time OMR Analysis
-    function analyzeRealOMRSheet(canvasId, totalItems, choicesCount) {
+    function startScanLoop() {
+      stopScanLoop();
+      scanTimer = setInterval(tickScan, SCAN_INTERVAL_MS);
+    }
+
+    function stopScanLoop() {
+      if (scanTimer) clearInterval(scanTimer);
+      scanTimer = null;
+    }
+
+    function resumeScanLoop() {
+      pendingScannedKey = null;
+      document.getElementById('key-apply-row').classList.add('hidden');
+      resetScanState();
+      setStatus('Looking for the sheet\u2019s 4 corner markers…', 'amber');
+      startScanLoop();
+    }
+
+    function currentCfg() {
+      if (cameraMode === 'key') {
+        return {
+          itemCount: parseInt(document.getElementById('key-item-count').value) || 20,
+          choicesCount: parseInt(document.getElementById('key-choices-count').value) || 4
+        };
+      }
+      return sections[activeSection];
+    }
+
+    function tickScan() {
+      if (!isOpenCvLoaded || !isCameraActive) return;
+      if (Date.now() < scanCooldownUntil) return;
+
+      const cfg = currentCfg();
+      if (!cfg) return;
+
+      let result;
+      try {
+        result = runOMREngine('scan-canvas', cfg.itemCount, cfg.choicesCount);
+      } catch (e) {
+        return; // transient frame read issue, just wait for the next tick
+      }
+
+      if (!result.aligned) {
+        stableHits = 0; lastSig = null;
+        setStatus('Looking for the sheet\u2019s 4 corner markers…', 'amber');
+        return;
+      }
+
+      const sig = JSON.stringify(result.detected);
+      stableHits = (sig === lastSig) ? stableHits + 1 : 1;
+      lastSig = sig;
+
+      drawPreview(result, cfg);
+      setStatus(`Sheet aligned — hold steady (${Math.min(stableHits, STABLE_HITS_REQUIRED)}/${STABLE_HITS_REQUIRED})`, 'blue');
+
+      if (stableHits >= STABLE_HITS_REQUIRED) {
+        finalizeCapture(result, cfg);
+      }
+    }
+
+    function manualCapture() {
+      if (!isOpenCvLoaded) { alert('OpenCV is still initializing, try again in a moment.'); return; }
+      const cfg = currentCfg();
+      if (!cfg) return;
+      let result;
+      try { result = runOMREngine('scan-canvas', cfg.itemCount, cfg.choicesCount); }
+      catch (e) { alert('Could not read the frame, try again.'); return; }
+      drawPreview(result, cfg);
+      finalizeCapture(result, cfg);
+    }
+
+    function finalizeCapture(result, cfg) {
+      if (cameraMode === 'key') {
+        stopScanLoop();
+        pendingScannedKey = { ...result.detected };
+        document.getElementById('key-apply-row').classList.remove('hidden');
+        setStatus('Key captured. Review the preview, then apply it.', 'emerald');
+        return;
+      }
+
+      // grade mode
+      const key = sections[activeSection].key;
+      const total = cfg.itemCount;
+      let correct = 0;
+      for (let i = 1; i <= total; i++) {
+        if (result.detected[i] && result.detected[i] === key[i]) correct++;
+      }
+      const scorePct = ((correct / total) * 100).toFixed(1);
+      const studentName = "Student " + Math.floor(1000 + Math.random() * 9000);
+
+      records.push({
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        name: studentName,
+        section: activeSection,
+        score: `${correct}/${total}`,
+        percentage: `${scorePct}%`,
+        answers: result.detected
+      });
+      saveRecords();
+      updateRecordsTable();
+
+      beep();
+      if (navigator.vibrate) navigator.vibrate(80);
+      setToast(`✓ ${studentName} — ${correct}/${total} (${scorePct}%)`, 'emerald');
+
+      stableHits = 0; lastSig = null;
+      scanCooldownUntil = Date.now() + COOLDOWN_MS;
+      setStatus('Saved. Swap in the next sheet…', 'amber');
+    }
+
+    async function applyScannedKey() {
+      if (!pendingScannedKey) return;
+      document.getElementById('key-item-count').value = currentCfg() ? currentCfg().itemCount : document.getElementById('key-item-count').value;
+      buildKeyEditor(pendingScannedKey);
+      closeCameraModal();
+      switchTab('scanner');
+      flashToastOnPage('Detected key loaded into the editor — review it, then click Save Key.');
+    }
+
+    // ---------- OMR engine ----------
+    // Returns { aligned, detected, bubbles } and draws the warped/thresholded
+    // sheet into the hidden #warp-buffer canvas for preview rendering.
+    function runOMREngine(canvasId, totalItems, choicesCount) {
       let src = cv.imread(canvasId);
       let gray = new cv.Mat();
-      let thresholded = new cv.Mat();
+      let blur = new cv.Mat();
+      let thresh = new cv.Mat();
 
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-      cv.adaptiveThreshold(gray, thresholded, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 15, 8);
+      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+      cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 19, 9);
+
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(thresh, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
+
+      let cornerCandidates = [];
+      let totalArea = thresh.cols * thresh.rows;
+
+      for (let i = 0; i < contours.size(); ++i) {
+        let cnt = contours.get(i);
+        let area = cv.contourArea(cnt);
+        let rect = cv.boundingRect(cnt);
+        let aspectRatio = rect.width / parseFloat(rect.height);
+
+        if (area > (totalArea * 0.0005) && area < (totalArea * 0.03)) {
+          if (aspectRatio >= 0.75 && aspectRatio <= 1.25) {
+            let hull = new cv.Mat();
+            cv.convexHull(cnt, hull);
+            let solidity = area / (cv.contourArea(hull) || 1);
+            hull.delete();
+
+            if (solidity > 0.85) {
+              cornerCandidates.push({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, area: area });
+            }
+          }
+        }
+        cnt.delete();
+      }
+
+      let warped = new cv.Mat();
+      const W = 800, H = 1000;
+      let aligned = false;
+
+      if (cornerCandidates.length >= 4) {
+        cornerCandidates.sort((a, b) => b.area - a.area);
+        let top4 = cornerCandidates.slice(0, 4);
+
+        let sums = top4.map(p => p.x + p.y);
+        let diffs = top4.map(p => p.y - p.x);
+
+        let topLeft = top4[sums.indexOf(Math.min(...sums))];
+        let bottomRight = top4[sums.indexOf(Math.max(...sums))];
+        let topRight = top4[diffs.indexOf(Math.min(...diffs))];
+        let bottomLeft = top4[diffs.indexOf(Math.max(...diffs))];
+
+        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+          topLeft.x, topLeft.y, topRight.x, topRight.y,
+          bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y
+        ]);
+        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
+
+        let M = cv.getPerspectiveTransform(srcTri, dstTri);
+        cv.warpPerspective(thresh, warped, M, new cv.Size(W, H));
+        aligned = true;
+
+        srcTri.delete(); dstTri.delete(); M.delete();
+      } else {
+        cv.resize(thresh, warped, new cv.Size(W, H));
+      }
 
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
-      let detectedAnswers = {};
-      
-      const width = thresholded.cols;
-      const height = thresholded.rows;
+      let detected = {};
+      let bubbles = [];
 
-      const startXRatio = 0.22;
-      const startYRatio = 0.22;
-      const itemRowHeightRatio = 0.035;
-      const optionWidthRatio = 0.045;
+      const startXRatio = 0.178;
+      const startYRatio = 0.190;
+      const rowStepRatio = 0.029;
+      const colWidthRatio = 0.040;
 
       for (let i = 1; i <= totalItems; i++) {
-        let colIndex = Math.floor((i - 1) / 20);
-        let rowIndex = (i - 1) % 20;
+        let colIdx = Math.floor((i - 1) / 20);
+        let rowIdx = (i - 1) % 20;
 
-        let rowCenterY = Math.floor(height * (startYRatio + (rowIndex * itemRowHeightRatio)));
-        let itemStartX = Math.floor(width * (startXRatio + (colIndex * 0.38)));
+        let centerY = Math.floor(H * (startYRatio + (rowIdx * rowStepRatio)));
+        let itemX = Math.floor(W * (startXRatio + (colIdx * 0.38)));
 
-        let maxFill = -1;
-        let selectedChoice = 'N/A';
+        let fillDensities = [];
+        let positions = [];
 
-        labels.forEach((label, idx) => {
-          let bubbleCenterX = Math.floor(itemStartX + (idx * width * optionWidthRatio));
-          let radius = Math.floor(width * 0.015);
+        labels.forEach((_, idx) => {
+          let centerX = Math.floor(itemX + (idx * W * colWidthRatio));
+          let radius = Math.floor(W * 0.009);
+          positions.push({ x: centerX, y: centerY, r: radius });
 
-          let fillCount = 0;
-          let totalPixels = 0;
-
-          for (let py = rowCenterY - radius; py <= rowCenterY + radius; py++) {
-            for (let px = bubbleCenterX - radius; px <= bubbleCenterX + radius; px++) {
-              if (px >= 0 && px < width && py >= 0 && py < height) {
-                let dist = Math.sqrt(Math.pow(px - bubbleCenterX, 2) + Math.pow(py - rowCenterY, 2));
-                if (dist <= radius) {
-                  totalPixels++;
-                  if (thresholded.ucharPtr(py, px)[0] > 0) {
-                    fillCount++;
-                  }
+          let filledPixels = 0;
+          let count = 0;
+          for (let py = centerY - radius; py <= centerY + radius; py++) {
+            for (let px = centerX - radius; px <= centerX + radius; px++) {
+              if (px >= 0 && px < W && py >= 0 && py < H) {
+                if (Math.hypot(px - centerX, py - centerY) <= radius) {
+                  count++;
+                  if (warped.ucharPtr(py, px)[0] > 0) filledPixels++;
                 }
               }
             }
           }
-
-          let fillRatio = fillCount / (totalPixels || 1);
-          if (fillRatio > 0.35 && fillRatio > maxFill) {
-            maxFill = fillRatio;
-            selectedChoice = label;
-          }
+          fillDensities.push(filledPixels / (count || 1));
         });
 
-        detectedAnswers[i] = selectedChoice;
-      }
+        let maxVal = Math.max(...fillDensities);
+        let maxIdx = fillDensities.indexOf(maxVal);
+        let unshadedVals = fillDensities.filter((_, idx) => idx !== maxIdx);
+        let minVal = Math.min(...unshadedVals);
+        let avgUnshaded = unshadedVals.reduce((a, b) => a + b, 0) / unshadedVals.length;
 
-      src.delete(); gray.delete(); thresholded.delete();
-      return detectedAnswers;
-    }
-
-    async function captureAndGrade() {
-      if (!isOpenCvLoaded) {
-        alert('OpenCV.js engine is still loading. Please wait a moment...');
-        return;
-      }
-
-      const scanBtn = document.getElementById('scan-btn');
-      scanBtn.innerText = "Analyzing Name & Sheet...";
-
-      const section = document.getElementById('scan-section').value || 'Default-Section';
-      const totalItems = Object.keys(answerKey).length;
-      const choicesCount = parseInt(document.getElementById('gen-choices-count').value) || 4;
-      
-      if (totalItems === 0) {
-        alert('Please configure an answer key first.');
-        scanBtn.innerText = "Scan & Grade Sheet";
-        return;
-      }
-
-      // 1. Extract Name via OCR
-      const scannedName = await extractStudentNameFromBoxes('scan-canvas');
-      const studentName = scannedName.length > 0 ? scannedName : "UNKNOWN STUDENT";
-
-      // 2. Perform OMR Evaluation
-      const detectedAnswers = analyzeRealOMRSheet('scan-canvas', totalItems, choicesCount);
-
-      let correctCount = 0;
-      for (let i = 1; i <= totalItems; i++) {
-        if (detectedAnswers[i] && detectedAnswers[i] === answerKey[i]) {
-          correctCount++;
+        let choice = 'N/A';
+        if (maxVal >= 0.40 && (maxVal - avgUnshaded) > 0.25 && (maxVal / (minVal || 0.01)) > 2.0) {
+          choice = labels[maxIdx];
         }
+        detected[i] = choice;
+
+        labels.forEach((label, idx) => {
+          bubbles.push({ item: i, label, x: positions[idx].x, y: positions[idx].y, r: positions[idx].r, isDetected: label === choice });
+        });
       }
 
-      const scorePct = ((correctCount / totalItems) * 100).toFixed(1);
-      
-      const newRecord = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        name: studentName,
-        section: section,
-        score: `${correctCount}/${totalItems}`,
-        percentage: `${scorePct}%`
-      };
+      cv.imshow('warp-buffer', warped);
 
-      records.push(newRecord);
-      updateRecordsTable();
-      scanBtn.innerText = "Scan & Grade Sheet";
-      closeCameraModal();
-      showResultModal(studentName, section, `${correctCount}/${totalItems}`, `${scorePct}%`);
+      src.delete(); gray.delete(); blur.delete(); thresh.delete();
+      contours.delete(); hierarchy.delete(); warped.delete();
+
+      return { aligned, detected, bubbles };
     }
 
-    function showResultModal(name, section, score, percentage) {
-      document.getElementById('result-student-name').innerText = name;
-      document.getElementById('result-section').innerText = `Section: ${section}`;
-      document.getElementById('result-score').innerText = score;
-      document.getElementById('result-percentage').innerText = percentage;
-      
-      document.getElementById('result-modal').classList.remove('hidden');
-    }
+    // ---------- Preview rendering ----------
+    function drawPreview(result, cfg) {
+      const preview = document.getElementById('preview-canvas');
+      const buffer = document.getElementById('warp-buffer');
+      const ctx = preview.getContext('2d');
 
-    function closeResultModal() {
-      document.getElementById('result-modal').classList.add('hidden');
-    }
+      preview.width = 320;
+      preview.height = 400;
+      ctx.clearRect(0, 0, preview.width, preview.height);
+      ctx.drawImage(buffer, 0, 0, buffer.width, buffer.height, 0, 0, preview.width, preview.height);
 
-    function updateRecordsTable() {
-      const tbody = document.getElementById('records-table-body');
-      document.getElementById('record-count').innerText = records.length;
-      tbody.innerHTML = '';
+      const scaleX = preview.width / buffer.width;
+      const scaleY = preview.height / buffer.height;
+      const key = (cameraMode === 'grade' && sections[activeSection]) ? sections[activeSection].key : null;
 
-      records.forEach(rec => {
-        tbody.innerHTML += `
-          <tr class="hover:bg-slate-800/40 border-b border-slate-800/50">
-            <td class="p-2 sm:p-3 text-[11px] sm:text-xs text-slate-400">${rec.timestamp}</td>
-            <td class="p-2 sm:p-3">
-              <input type="text" value="${rec.name}" onchange="editRecord(${rec.id}, 'name', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500">
-            </td>
-            <td class="p-2 sm:p-3">
-              <input type="text" value="${rec.section}" onchange="editRecord(${rec.id}, 'section', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500">
-            </td>
-            <td class="p-2 sm:p-3 font-semibold text-indigo-300">${rec.score}</td>
-            <td class="p-2 sm:p-3 font-semibold text-emerald-400">${rec.percentage}</td>
-            <td class="p-2 sm:p-3 text-right">
-              <button onclick="deleteRecord(${rec.id})" class="text-rose-400 hover:text-rose-300 p-1">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
-            </td>
-          </tr>
-        `;
+      result.bubbles.forEach(b => {
+        const x = b.x * scaleX, y = b.y * scaleY, r = Math.max(3, b.r * scaleX);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+        ctx.stroke();
+
+        if (b.isDetected) {
+          let color = '#6366f1'; // key mode default
+          if (key) {
+            color = (key[b.item] === b.label) ? '#34d399' : '#f87171';
+          }
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.85;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
       });
     }
 
-    function editRecord(id, field, val) {
+    // ---------- Status / toast helpers ----------
+    const dotColors = { amber: 'bg-amber-400', blue: 'bg-blue-400', emerald: 'bg-emerald-400 pulse-live', rose: 'bg-rose-400' };
+    const textColors = { amber: 'text-amber-300', blue: 'text-blue-300', emerald: 'text-emerald-300', rose: 'text-rose-300', slate: 'text-slate-400' };
+
+    function setStatus(text, tone) {
+      document.getElementById('scan-status').innerText = text;
+      const dot = document.getElementById('scan-status-dot');
+      dot.className = 'status-dot ' + (dotColors[tone] || 'bg-amber-400');
+    }
+
+    function setToast(text, tone) {
+      const el = document.getElementById('scan-toast');
+      el.innerText = text;
+      el.className = `mt-3 text-sm font-semibold text-center py-2 rounded-lg bg-slate-900/60 border border-slate-800 ${textColors[tone] || 'text-slate-400'}`;
+    }
+    // toast alias used within finalizeCapture
+    function setToastGrade(text) { setToast(text, 'emerald'); }
+
+    function flashToastOnPage(msg) {
+      let el = document.getElementById('page-toast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'page-toast';
+        el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 aurora-card px-5 py-3 rounded-xl text-sm font-medium text-emerald-300';
+        document.body.appendChild(el);
+      }
+      el.innerText = msg;
+      el.style.opacity = '1';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.style.opacity = '0'; }, 2600);
+    }
+
+    function beep() {
+      try {
+        const ctxA = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctxA.createOscillator();
+        const gain = ctxA.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.15, ctxA.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctxA.currentTime + 0.18);
+        osc.connect(gain).connect(ctxA.destination);
+        osc.start();
+        osc.stop(ctxA.currentTime + 0.18);
+      } catch (e) { /* audio not available, ignore */ }
+    }
+
+    // ---------- Records ----------
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    function updateRecordsTable() {
+      const filter = document.getElementById('records-filter').value;
+      const filtered = filter ? records.filter(r => r.section === filter) : records;
+
+      const tbody = document.getElementById('records-table-body');
+      document.getElementById('record-count').innerText = records.length;
+      tbody.innerHTML = '';
+      document.getElementById('records-empty').classList.toggle('hidden', filtered.length !== 0);
+
+      filtered.slice().reverse().forEach(rec => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-800/40 border-b border-slate-800';
+        row.innerHTML = `
+          <td class="p-3 text-slate-400">${escapeHtml(rec.timestamp)}</td>
+          <td class="p-3 font-medium text-white cursor-pointer" onclick="editRecordName(${rec.id})" title="Click to rename">${escapeHtml(rec.name)} <i class="fa-solid fa-pen text-[10px] text-slate-500 ml-1"></i></td>
+          <td class="p-3 text-slate-300">${escapeHtml(rec.section)}</td>
+          <td class="p-3 font-semibold text-indigo-300">${escapeHtml(rec.score)}</td>
+          <td class="p-3 font-semibold text-emerald-400">${escapeHtml(rec.percentage)}</td>
+          <td class="p-3 text-right">
+            <button onclick="deleteRecord(${rec.id})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash-can"></i></button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function editRecordName(id) {
       const rec = records.find(r => r.id === id);
-      if (rec) rec[field] = val;
+      if (!rec) return;
+      const name = prompt('Student name:', rec.name);
+      if (name && name.trim()) {
+        rec.name = name.trim();
+        saveRecords();
+        updateRecordsTable();
+      }
     }
 
     function deleteRecord(id) {
       records = records.filter(r => r.id !== id);
+      saveRecords();
       updateRecordsTable();
+      updateAnalysisTable();
+    }
+
+    function exportCSV() {
+      if (records.length === 0) { alert('No records to export yet.'); return; }
+      const header = ['Time', 'Student Name', 'Section', 'Score', 'Percentage'];
+      const rows = records.map(r => [r.timestamp, r.name, r.section, r.score, r.percentage]);
+      const csv = [header, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `omr_records_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     async function syncToGoogleSheets() {
-      if (GAS_WEB_APP_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE" || !GAS_WEB_APP_URL) {
-        alert('Please update the GAS_WEB_APP_URL variable inside the script section with your deployed Google Apps Script URL.');
-        return;
-      }
-
-      if (records.length === 0) {
-        alert('No scanned records available to push.');
-        return;
-      }
-
+      if (!GAS_WEB_APP_URL || records.length === 0) return;
       try {
         await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
@@ -684,11 +1012,55 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(records)
         });
-        alert('Data successfully dispatched to Google Sheets!');
+        alert('Data synced to Google Sheets.');
       } catch (err) {
         alert('Sync error: ' + err.message);
       }
     }
+
+    // ---------- Analysis ----------
+    function updateAnalysisTable() {
+      const section = document.getElementById('analysis-section-select').value;
+      const tbody = document.getElementById('analysis-table-body');
+      const empty = document.getElementById('analysis-empty');
+      tbody.innerHTML = '';
+
+      if (!section || !sections[section]) { empty.classList.remove('hidden'); return; }
+      const relevant = records.filter(r => r.section === section && r.answers);
+      if (relevant.length === 0) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+
+      const key = sections[section].key;
+      const itemCount = sections[section].itemCount;
+
+      for (let i = 1; i <= itemCount; i++) {
+        let responded = 0, correct = 0;
+        relevant.forEach(r => {
+          const ans = r.answers[i];
+          if (ans && ans !== 'N/A') responded++;
+          if (ans === key[i]) correct++;
+        });
+        const pct = relevant.length ? ((correct / relevant.length) * 100).toFixed(0) : '0';
+        const flag = pct < 50 ? '<span class="text-rose-400 font-semibold">Hard</span>' : (pct < 75 ? '<span class="text-amber-400">Tricky</span>' : '<span class="text-emerald-400">OK</span>');
+
+        const row = document.createElement('tr');
+        row.className = 'border-b border-slate-800';
+        row.innerHTML = `
+          <td class="p-3 font-medium text-white">Q${i}</td>
+          <td class="p-3 text-indigo-300 font-semibold">${escapeHtml(key[i] || '—')}</td>
+          <td class="p-3 text-slate-400">${responded}/${relevant.length}</td>
+          <td class="p-3">${pct}%</td>
+          <td class="p-3">${flag}</td>
+        `;
+        tbody.appendChild(row);
+      }
+    }
+
+    // ---------- Init ----------
+    window.addEventListener('DOMContentLoaded', () => {
+      buildKeyEditor();
+      loadState();
+    });
   </script>
 </body>
 </html>
