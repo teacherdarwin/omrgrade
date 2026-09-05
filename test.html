@@ -466,6 +466,47 @@
       loadSectionIntoEditor('');
     }
 
+    // ---------- Shared physical layout (single source of truth, in mm) ----------
+    // Both the PDF generator and the OMR scanner read from this object, so the
+    // printed bubble positions and the sampled bubble positions can never drift
+    // out of sync with each other.
+    const SHEET_LAYOUT = {
+      markerSize: 12,     // black square markers are 12mm x 12mm
+      markerLeft: 10,     // left markers' top-left corner x
+      markerRight: 188,   // right markers' top-left corner x
+      markerTop: 10,      // top markers' top-left corner y
+      markerBottom: 275,  // bottom markers' top-left corner y
+      startX: 30,
+      startY: 56,
+      rowStep: 8.5,
+      colStep: 75,
+      itemsPerColumn: 20,
+      bubbleOffsetX: 8,
+      bubbleStepX: 8.5,
+      bubbleYAdjust: -1.2,
+      bubbleRadius: 2.6
+    };
+
+    function markerFrame(layout) {
+      const half = layout.markerSize / 2;
+      return {
+        left: layout.markerLeft + half,
+        top: layout.markerTop + half,
+        right: layout.markerRight + half,
+        bottom: layout.markerBottom + half
+      };
+    }
+
+    // Physical mm position of a given item/choice bubble's center.
+    function bubbleMM(item, choiceIdx, layout) {
+      const rowIdx = (item - 1) % layout.itemsPerColumn;
+      const colIdx = Math.floor((item - 1) / layout.itemsPerColumn);
+      return {
+        x: layout.startX + colIdx * layout.colStep + layout.bubbleOffsetX + choiceIdx * layout.bubbleStepX,
+        y: layout.startY + rowIdx * layout.rowStep + layout.bubbleYAdjust
+      };
+    }
+
     // ---------- PDF generation ----------
     function generatePDFSheet() {
       const { jsPDF } = window.jspdf;
@@ -501,30 +542,23 @@
       doc.text('Section: __________________', 28, 39);
       doc.text('Date: ____________', 130, 39);
 
-      let startX = 30;
-      let startY = 56;
-      let yOffset = 0;
-      let colOffset = 0;
+      const layout = { ...SHEET_LAYOUT };
 
       for (let i = 1; i <= itemCount; i++) {
-        let currentY = startY + yOffset;
-        let currentX = startX + colOffset;
+        const rowIdx = (i - 1) % layout.itemsPerColumn;
+        const colIdx = Math.floor((i - 1) / layout.itemsPerColumn);
+        const currentY = layout.startY + rowIdx * layout.rowStep;
+        const currentX = layout.startX + colIdx * layout.colStep;
 
         doc.text(`${i}.`, currentX, currentY);
 
         labels.forEach((label, idx) => {
-          let bubbleX = currentX + 8 + (idx * 8.5);
-          doc.circle(bubbleX, currentY - 1.2, 2.6, 'S');
+          const pos = bubbleMM(i, idx, layout);
+          doc.circle(pos.x, pos.y, layout.bubbleRadius, 'S');
           doc.setFontSize(6.5);
-          doc.text(label, bubbleX - 0.7, currentY - 0.3);
+          doc.text(label, pos.x - 0.7, pos.y + 0.9);
           doc.setFontSize(9);
         });
-
-        yOffset += 8.5;
-        if (i % 20 === 0) {
-          colOffset += 75;
-          yOffset = 0;
-        }
       }
 
       doc.save(`OMR_Sheet_${itemCount}_Items${markAsKey ? '_KEY' : ''}.pdf`);
@@ -761,8 +795,21 @@
         cnt.delete();
       }
 
+      // Warp target is sized to exactly match the physical marker rectangle's
+      // aspect ratio (computed from SHEET_LAYOUT, in mm), at a fixed scale of
+      // 4 px/mm. Getting this ratio right matters: a mismatched target stretches
+      // the image non-uniformly, which silently shifts every bubble's sampling
+      // position further off the more rows/columns away from the top-left it is.
+      const frame = markerFrame(SHEET_LAYOUT);
+      const PX_PER_MM = 4;
+      const W = Math.round((frame.right - frame.left) * PX_PER_MM);
+      const H = Math.round((frame.bottom - frame.top) * PX_PER_MM);
+      const expectedRatio = (frame.right - frame.left) / (frame.bottom - frame.top);
+
+      function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+      let warpedGray = new cv.Mat();
       let warped = new cv.Mat();
-      const W = 800, H = 1000;
       let aligned = false;
 
       if (cornerCandidates.length >= 4) {
@@ -777,43 +824,54 @@
         let topRight = top4[diffs.indexOf(Math.min(...diffs))];
         let bottomLeft = top4[diffs.indexOf(Math.max(...diffs))];
 
-        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-          topLeft.x, topLeft.y, topRight.x, topRight.y,
-          bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y
-        ]);
-        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
+        // Sanity-check the quad before trusting it: real markers form a
+        // rectangle with the sheet's known aspect ratio. Noise (shadows,
+        // fingers, desk texture) rarely does, so reject anything too far off
+        // rather than silently grading a garbage warp.
+        const measuredWidth = (dist(topLeft, topRight) + dist(bottomLeft, bottomRight)) / 2;
+        const measuredHeight = (dist(topLeft, bottomLeft) + dist(topRight, bottomRight)) / 2;
+        const measuredRatio = measuredWidth / (measuredHeight || 1);
+        const ratioError = Math.abs(measuredRatio - expectedRatio) / expectedRatio;
 
-        let M = cv.getPerspectiveTransform(srcTri, dstTri);
-        cv.warpPerspective(thresh, warped, M, new cv.Size(W, H));
-        aligned = true;
+        if (ratioError < 0.25) {
+          let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            topLeft.x, topLeft.y, topRight.x, topRight.y,
+            bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y
+          ]);
+          let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
 
-        srcTri.delete(); dstTri.delete(); M.delete();
-      } else {
-        cv.resize(thresh, warped, new cv.Size(W, H));
+          let M = cv.getPerspectiveTransform(srcTri, dstTri);
+          // Warp the smooth grayscale image, NOT the already-binarized mask.
+          // Warping a hard black/white image blurs its edges into gray on
+          // resample, which the old code then miscounted as "filled" near
+          // every bubble edge. Threshold after warping instead, once the
+          // sheet is a fixed, known size.
+          cv.warpPerspective(blur, warpedGray, M, new cv.Size(W, H));
+          aligned = true;
+
+          srcTri.delete(); dstTri.delete(); M.delete();
+        }
       }
+
+      if (!aligned) {
+        cv.resize(blur, warpedGray, new cv.Size(W, H));
+      }
+      cv.adaptiveThreshold(warpedGray, warped, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 21, 10);
 
       const labels = ['A', 'B', 'C', 'D', 'E'].slice(0, choicesCount);
       let detected = {};
       let bubbles = [];
-
-      const startXRatio = 0.178;
-      const startYRatio = 0.190;
-      const rowStepRatio = 0.029;
-      const colWidthRatio = 0.040;
+      const radiusPx = SHEET_LAYOUT.bubbleRadius * PX_PER_MM * 0.85; // sample slightly inside the printed circle
 
       for (let i = 1; i <= totalItems; i++) {
-        let colIdx = Math.floor((i - 1) / 20);
-        let rowIdx = (i - 1) % 20;
-
-        let centerY = Math.floor(H * (startYRatio + (rowIdx * rowStepRatio)));
-        let itemX = Math.floor(W * (startXRatio + (colIdx * 0.38)));
-
         let fillDensities = [];
         let positions = [];
 
         labels.forEach((_, idx) => {
-          let centerX = Math.floor(itemX + (idx * W * colWidthRatio));
-          let radius = Math.floor(W * 0.009);
+          const mm = bubbleMM(i, idx, SHEET_LAYOUT);
+          const centerX = Math.round((mm.x - frame.left) * PX_PER_MM);
+          const centerY = Math.round((mm.y - frame.top) * PX_PER_MM);
+          const radius = Math.round(radiusPx);
           positions.push({ x: centerX, y: centerY, r: radius });
 
           let filledPixels = 0;
@@ -851,7 +909,7 @@
       cv.imshow('warp-buffer', warped);
 
       src.delete(); gray.delete(); blur.delete(); thresh.delete();
-      contours.delete(); hierarchy.delete(); warped.delete();
+      contours.delete(); hierarchy.delete(); warped.delete(); warpedGray.delete();
 
       return { aligned, detected, bubbles };
     }
