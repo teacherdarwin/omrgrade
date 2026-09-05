@@ -47,6 +47,29 @@
     @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);} 100% { box-shadow: 0 0 0 12px rgba(52, 211, 153, 0);} }
     .pulse-live { animation: pulse-ring 1.4s ease-out infinite; }
     .hidden-canvas { display: none; }
+
+    /* Speech Bubble CSS Fix */
+    .speech-bubble {
+      position: relative;
+      background: #4f46e5;
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .speech-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 24px;
+      border-width: 8px 8px 0;
+      border-style: solid;
+      border-color: #4f46e5 transparent;
+      display: block;
+      width: 0;
+    }
   </style>
 </head>
 <body class="min-h-screen pb-12 text-slate-100">
@@ -80,6 +103,12 @@
 
     <!-- GENERATOR -->
     <section id="sec-generator" class="space-y-6">
+      
+      <!-- Integrated Speech Bubble Element -->
+      <div class="speech-bubble">
+        <i class="fa-solid fa-circle-info mr-2"></i>Configure your exam layout below and download the printable PDF sheet.
+      </div>
+
       <div class="aurora-card p-4 sm:p-6 rounded-2xl">
         <h2 class="text-lg font-semibold mb-4 text-indigo-300"><i class="fa-solid fa-sliders mr-2"></i>Sheet Layout Setup</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
